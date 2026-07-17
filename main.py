@@ -68,15 +68,7 @@ def estado():
 
 @servidor.route('/webhook', methods=['GET','POST'])
 def recibir_webhook():
-    global loop_principal, bot_app, listo
-    if request.method == 'POST' and listo:
-        try:
-            datos = request.get_json()
-            actualizacion = Update.de_json(datos, bot_app.bot)
-            asyncio.run_coroutine_threadsafe(bot_app.process_update(actualizacion), loop_principal)
-        except Exception as e:
-            print(f"⚠️ Error en webhook: {e}")
-    return "✅ Recibido"
+    return "🔌 El sistema usa conexión directa, esta ruta es solo informativa"
 
 def iniciar_servidor():
     servidor.run(host="0.0.0.0", port=PUERTO)
@@ -284,7 +276,6 @@ async def iniciar_todo():
 
     print("🤖 Conectando al bot...")
     bot_app = ApplicationBuilder().token(Config.BOT_TOKEN).build()
-    # ✅ LÍNEA OBLIGATORIA QUE FALTABA
     await bot_app.initialize()
 
     # 📋 TODOS LOS COMANDOS
@@ -323,13 +314,12 @@ async def iniciar_todo():
     bot_app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, recibir_configuracion))
     bot_app.add_handler(CallbackQueryHandler(manejar_botones))
 
-    # 🔗 WEBHOOK - AHORA SÍ ESTÁ TODO INICIALIZADO
+    # 🚀 ELIMINAMOS WEBHOOK Y USAMOS SOLO CONEXIÓN DIRECTA
     await bot_app.bot.delete_webhook(drop_pending_updates=True)
-    await bot_app.bot.set_webhook(url=f"{DOMINIO}/webhook")
+    print("🔌 Modo de conexión: Polling directo activado")
     listo = True
 
-    print(f"✅ WEBHOOK ACTIVO: {DOMINIO}/webhook")
-    print("⚡ VOLTIXPRO V4 ESTÁ 100% FUNCIONAL")
+    print("⚡ VOLTIXPRO V4 ARRANCADO Y ESCUCHANDO MENSAJES")
 
     # Revisión automática de paneles cada 30 minutos
     async def revisar_periodico():
@@ -338,9 +328,9 @@ async def iniciar_todo():
             await revisar_estado_paneles(bot_app)
     asyncio.create_task(revisar_periodico())
 
-    # Mantener ejecución correcta
+    # Arrancamos todo correctamente
     await bot_app.start()
-    await bot_app.updater.start_polling()
+    await bot_app.updater.start_polling(drop_pending_updates=True)
 
 
 if __name__ == "__main__":
