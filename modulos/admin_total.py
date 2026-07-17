@@ -16,8 +16,8 @@ from texto import t
 
 # 📌 Dar permisos especiales
 async def dar_permisos(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    admin_id = update.effective_user.id
-    if admin_id != Config.ADMIN_ID:
+    user_id = update.effective_user.id
+    if user_id != Config.ADMIN_ID:
         return await update.message.reply_text(await t("acceso_denegado"))
 
     if len(context.args) < 2:
@@ -33,14 +33,14 @@ async def dar_permisos(update: Update, context: ContextTypes.DEFAULT_TYPE):
         {"user_id": usuario_id},
         {"$set": {"permisos": permisos}}
     )
-    await registrar_accion(admin_id, "Modificó permisos", f"Usuario {usuario_id}: {permisos}")
+    await registrar_accion(user_id, "Modificó permisos", f"Usuario {usuario_id}: {permisos}")
     await update.message.reply_text(f"✅ Permisos actualizados correctamente para el usuario {usuario_id}")
 
 
 # 📌 Cambiar rol de usuario
 async def cambiar_rol(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    admin_id = update.effective_user.id
-    if admin_id != Config.ADMIN_ID:
+    user_id = update.effective_user.id
+    if user_id != Config.ADMIN_ID:
         return await update.message.reply_text(await t("acceso_denegado"))
 
     if len(context.args) < 2:
@@ -60,14 +60,14 @@ async def cambiar_rol(update: Update, context: ContextTypes.DEFAULT_TYPE):
         {"user_id": usuario_id},
         {"$set": {"rol": nuevo_rol}}
     )
-    await registrar_accion(admin_id, "Cambió rol", f"Usuario {usuario_id} → {nuevo_rol}")
+    await registrar_accion(user_id, "Cambió rol", f"Usuario {usuario_id} → {nuevo_rol}")
     await update.message.reply_text(f"✅ Rol cambiado correctamente a «{nuevo_rol}»")
 
 
 # 📌 Agregar saldo manualmente
 async def recargar_saldo_manual(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    admin_id = update.effective_user.id
-    if admin_id != Config.ADMIN_ID:
+    user_id = update.effective_user.id
+    if user_id != Config.ADMIN_ID:
         return await update.message.reply_text(await t("acceso_denegado"))
 
     if len(context.args) < 2:
@@ -86,7 +86,7 @@ async def recargar_saldo_manual(update: Update, context: ContextTypes.DEFAULT_TY
         {"user_id": usuario_id},
         {"$inc": {"saldo": monto}}
     )
-    await registrar_accion(admin_id, "Agregó saldo", f"Usuario {usuario_id} + {Config.SIMBOLO}{monto}")
+    await registrar_accion(user_id, "Agregó saldo", f"Usuario {usuario_id} + {Config.SIMBOLO}{monto}")
     await update.message.reply_text(f"✅ Se agregó {Config.SIMBOLO}{monto} al usuario {usuario_id}")
 
     # Avisar al usuario
@@ -99,8 +99,8 @@ async def recargar_saldo_manual(update: Update, context: ContextTypes.DEFAULT_TY
 
 # 📌 Bloquear o desbloquear usuario
 async def banear_usuario(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    admin_id = update.effective_user.id
-    if admin_id != Config.ADMIN_ID:
+    user_id = update.effective_user.id
+    if user_id != Config.ADMIN_ID:
         return await update.message.reply_text(await t("acceso_denegado"))
 
     if not context.args:
@@ -125,14 +125,14 @@ async def banear_usuario(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     accion = "Bloqueó usuario" if nuevo_estado else "Desbloqueó usuario"
     texto = "✅ Usuario bloqueado correctamente" if nuevo_estado else "✅ Usuario desbloqueado correctamente"
-    await registrar_accion(admin_id, accion, f"Usuario {usuario_id}")
+    await registrar_accion(user_id, accion, f"Usuario {usuario_id}")
     await update.message.reply_text(texto)
 
 
 # 📌 Guardar configuración general
 async def guardar_configuracion(accion: str, valor: str):
     try:
-        if accion in ["monto_minimo_recarga", "porcentaje_ganancia", "limite_diario", "recompensa_referido", "aviso_saldo_minimo"]:
+        if accion in ["monto_minimo_recarga", "porcentaje_ganancia", "limite_diario_global", "recompensa_referido", "aviso_saldo_minimo"]:
             valor = float(valor)
 
         coleccion_configuracion.update_one(
@@ -147,28 +147,33 @@ async def guardar_configuracion(accion: str, valor: str):
 
 # 📌 Alternar modo mantenimiento
 async def alternar_mantenimiento(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    admin_id = update.effective_user.id
-    if admin_id != Config.ADMIN_ID:
+    user_id = update.effective_user.id
+    if user_id != Config.ADMIN_ID:
         await update.callback_query.answer(await t("acceso_denegado"), show_alert=True)
         return
 
-    estado_actual = coleccion_configuracion.find_one({"clave": "modo_mantenimiento"}).get("valor", False)
+    estado_doc = coleccion_configuracion.find_one({"clave": "modo_mantenimiento"})
+    estado_actual = estado_doc.get("valor", False) if estado_doc else False
     nuevo_estado = not estado_actual
 
     coleccion_configuracion.update_one(
         {"clave": "modo_mantenimiento"},
-        {"$set": {"valor": nuevo_estado}}
+        {"$set": {"valor": nuevo_estado}},
+        upsert=True
     )
 
-    await registrar_accion(admin_id, "Cambió modo mantenimiento", f"Estado: {nuevo_estado}")
-    texto = await t("modo_mantenimiento") if nuevo_estado else "✅ El mantenimiento ha finalizado, todo está activo nuevamente"
+    await registrar_accion(user_id, "Cambió modo mantenimiento", f"Estado: {nuevo_estado}")
+    if nuevo_estado:
+        texto = await t("modo_mantenimiento")
+    else:
+        texto = "✅ El mantenimiento ha finalizado, todo está activo nuevamente"
     await update.callback_query.edit_message_text(texto, parse_mode="HTML", reply_markup=menu_acciones)
 
 
 # 📌 Copiar configuración entre paneles
 async def copiar_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    admin_id = update.effective_user.id
-    if admin_id != Config.ADMIN_ID:
+    user_id = update.effective_user.id
+    if user_id != Config.ADMIN_ID:
         return await update.message.reply_text(await t("acceso_denegado"))
 
     if len(context.args) < 2:
@@ -187,23 +192,23 @@ async def copiar_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     coleccion_paneles.update_one(
         {"_id": id_destino},
         {"$set": {
-            "porcentaje_ganancia": origen["porcentaje_ganancia"],
-            "activo": origen["activo"]
+            "porcentaje_ganancia": origen.get("porcentaje_ganancia", Config.PORCENTAJE_GANANCIA),
+            "activo": origen.get("activo", True)
         }}
     )
 
-    await registrar_accion(admin_id, "Copió configuración de panel", f"De {id_origen} a {id_destino}")
+    await registrar_accion(user_id, "Copió configuración de panel", f"De {id_origen} a {id_destino}")
     await update.message.reply_text("✅ Configuración copiada perfectamente")
 
 
 # 📌 Crear respaldo completo
 async def crear_respaldo(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    admin_id = update.effective_user.id
-    if admin_id != Config.ADMIN_ID:
+    user_id = update.effective_user.id
+    if user_id != Config.ADMIN_ID:
         await update.callback_query.answer(await t("acceso_denegado"), show_alert=True)
         return
 
-    todas_colecciones = ["usuarios", "categorias", "servicios", "facturas", "paneles", "configuracion", "auditoria"]
+    todas_colecciones = ["usuarios", "categorias", "servicios", "facturas", "paneles", "configuracion", "auditoria", "avisos_programados"]
     datos = {}
     for nombre in todas_colecciones:
         datos[nombre] = list(db[nombre].find({}))
@@ -213,7 +218,7 @@ async def crear_respaldo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     with open(nombre_archivo, "w", encoding="utf-8") as archivo:
         archivo.write(dumps(datos, indent=2, ensure_ascii=False))
 
-    await registrar_accion(admin_id, "Generó respaldo", nombre_archivo)
+    await registrar_accion(user_id, "Generó respaldo", nombre_archivo)
     await context.bot.send_document(update.effective_chat.id, document=open(nombre_archivo, "rb"))
     os.remove(nombre_archivo)
 
@@ -222,8 +227,8 @@ async def crear_respaldo(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # 📌 Configurar límite de gasto
 async def configurar_limite(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    admin_id = update.effective_user.id
-    if admin_id != Config.ADMIN_ID:
+    user_id = update.effective_user.id
+    if user_id != Config.ADMIN_ID:
         return await update.message.reply_text(await t("acceso_denegado"))
 
     if not context.args:
@@ -234,15 +239,20 @@ async def configurar_limite(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except:
         return await update.message.reply_text("❌ Solo puedes usar números")
 
-    coleccion_configuracion.update_one({"clave": "limite_diario_global"}, {"$set": {"valor": monto}})
-    await registrar_accion(admin_id, "Configuró límite diario", f"{Config.SIMBOLO}{monto}")
+    coleccion_configuracion.update_one({"clave": "limite_diario_global"}, {"$set": {"valor": monto}}, upsert=True)
+    await registrar_accion(user_id, "Configuró límite diario", f"{Config.SIMBOLO}{monto}")
     await update.message.reply_text(f"✅ Límite diario fijado en: {Config.SIMBOLO}{monto}")
 
 
 # 📌 Ver niveles y descuentos
 async def ver_niveles(update: Update, context: ContextTypes.DEFAULT_TYPE):
     configuracion = coleccion_configuracion.find_one({"clave": "niveles"})
-    niveles = configuracion.get("valor", {}) if configuracion else {}
+    niveles = configuracion.get("valor", {}) if configuracion else {
+        "bronce": {"descuento": 0, "minimo_gasto": 0},
+        "plata": {"descuento": 5, "minimo_gasto": 50},
+        "oro": {"descuento": 10, "minimo_gasto": 150},
+        "diamante": {"descuento": 18, "minimo_gasto": 400}
+    }
     
     texto = "🏅 <b>NIVELES Y DESCUENTOS</b>\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
     for nivel, datos in niveles.items():
@@ -253,8 +263,8 @@ async def ver_niveles(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # 📌 Crear categoría nueva
 async def crear_categoria(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    admin_id = update.effective_user.id
-    if admin_id != Config.ADMIN_ID:
+    user_id = update.effective_user.id
+    if user_id != Config.ADMIN_ID:
         return await update.message.reply_text(await t("acceso_denegado"))
 
     if not context.args:
@@ -267,23 +277,27 @@ async def crear_categoria(update: Update, context: ContextTypes.DEFAULT_TYPE):
     coleccion_categorias.insert_one({
         "nombre": nombre,
         "descripcion": descripcion,
+        "activo": True,
         "creado_en": datetime.now()
     })
 
-    await registrar_accion(admin_id, "Creó categoría", nombre)
+    await registrar_accion(user_id, "Creó categoría", nombre)
     await update.message.reply_text(f"✅ Categoría «{nombre}» creada exitosamente")
 
 
 # 📌 Sincronizar servicios
 async def sincronizar_servicios(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    admin_id = update.effective_user.id
-    if admin_id != Config.ADMIN_ID:
+    user_id = update.effective_user.id
+    if user_id != Config.ADMIN_ID:
         await update.callback_query.answer(await t("acceso_denegado"), show_alert=True)
         return
 
     await update.callback_query.edit_message_text("🔄 Sincronizando servicios, por favor espera unos segundos...")
-    from api.importar_servicios import importar_desde_api
-    resultado = await importar_desde_api()
+    try:
+        from api.importar_servicios import importar_desde_api
+        resultado = await importar_desde_api()
+    except Exception as e:
+        resultado = f"Error al sincronizar: {str(e)}"
 
-    await registrar_accion(admin_id, "Sincronizó servicios", resultado)
+    await registrar_accion(user_id, "Sincronizó servicios", resultado)
     await update.callback_query.edit_message_text(f"✅ {resultado}", reply_markup=menu_acciones)
