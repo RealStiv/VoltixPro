@@ -59,7 +59,7 @@ PUERTO = int(os.getenv("PORT", 8080))
 servidor = Flask(__name__)
 esperando_respuesta = {}
 
-# Ruta para que Render no apague el servicio
+# Ruta para mantener el servicio activo
 @servidor.route('/')
 def estado():
     return "✅ VOLTIXPRO V4 | ACTIVO Y ESCUCHANDO MENSAJES"
@@ -67,7 +67,7 @@ def estado():
 def iniciar_servidor_web():
     servidor.run(host="0.0.0.0", port=PUERTO, use_reloader=False)
 
-# ------------------ TODAS LAS FUNCIONES DEL BOT ------------------
+# ------------------ FUNCIONES DEL BOT ------------------
 async def inicio(update: Update, context: ContextTypes.DEFAULT_TYPE):
     args = context.args
     user = update.effective_user
@@ -211,81 +211,68 @@ Simplemente envía una foto para ponerla de portada.""")
         nombre_cat = dato.split("_", 2)[2]
         await mostrar_servicios(update, context, nombre_cat)
 
-# ------------------ ARRANQUE DEFINITIVO SIN ERRORES ------------------
-if __name__ == "__main__":
-    # Servidor web en segundo plano
-    hilo_web = Thread(target=iniciar_servidor_web, daemon=True)
-    hilo_web.start()
-    print("🌐 Servidor web listo")
+# ------------------ ARRANQUE FINAL SIN ERRORES ------------------
+async def ejecutar_bot():
+    await iniciar_configuracion()
+    print("🤖 Conectando a Telegram...")
+    
+    bot_app = ApplicationBuilder().token(Config.BOT_TOKEN).build()
 
-    async def ejecutar_bot():
-        await iniciar_configuracion()
-        print("🤖 Conectando a Telegram...")
-        
-        bot_app = ApplicationBuilder().token(Config.BOT_TOKEN).build()
+    # TODOS LOS COMANDOS
+    bot_app.add_handler(CommandHandler("start", inicio))
+    bot_app.add_handler(CommandHandler("cambiar", cambiar_ajuste))
+    bot_app.add_handler(CommandHandler("bienvenida", bienvenida_personalizada))
+    bot_app.add_handler(CommandHandler("permisos", dar_permisos))
+    bot_app.add_handler(CommandHandler("rol", cambiar_rol))
+    bot_app.add_handler(CommandHandler("addsaldo", recargar_saldo_manual))
+    bot_app.add_handler(CommandHandler("ban", banear_usuario))
+    bot_app.add_handler(CommandHandler("unban", banear_usuario))
+    bot_app.add_handler(CommandHandler("crearcategoria", crear_categoria))
+    bot_app.add_handler(CommandHandler("agregarpanel", agregar_panel_smm))
+    bot_app.add_handler(CommandHandler("editarpanel", editar_panel))
+    bot_app.add_handler(CommandHandler("eliminarpanel", eliminar_panel))
+    bot_app.add_handler(CommandHandler("copiarpanel", copiar_panel))
+    bot_app.add_handler(CommandHandler("actualizar", sincronizar_servicios))
+    bot_app.add_handler(CommandHandler("limite", configurar_limite))
+    bot_app.add_handler(CommandHandler("niveles", ver_niveles))
+    bot_app.add_handler(CommandHandler("respaldo", crear_respaldo))
+    bot_app.add_handler(CommandHandler("buscar", buscar_servicios))
+    bot_app.add_handler(CommandHandler("usarreferido", verificar_referido))
+    bot_app.add_handler(CommandHandler("moneda", cambiar_moneda))
+    bot_app.add_handler(CommandHandler("faq", ver_faq))
+    bot_app.add_handler(CommandHandler("recargar", iniciar_recarga))
+    bot_app.add_handler(CommandHandler("diagnosticar", diagnosticar_panel))
+    bot_app.add_handler(CommandHandler("probar", probar_servicio))
+    bot_app.add_handler(CommandHandler("estadisticas", ver_estadisticas_generales))
+    bot_app.add_handler(CommandHandler("dorks", generar_dorks))
+    bot_app.add_handler(CommandHandler("bin", validar_bin))
+    bot_app.add_handler(CommandHandler("cc", generar_cc))
 
-        # TODOS LOS COMANDOS REGISTRADOS
-        bot_app.add_handler(CommandHandler("start", inicio))
-        bot_app.add_handler(CommandHandler("cambiar", cambiar_ajuste))
-        bot_app.add_handler(CommandHandler("bienvenida", bienvenida_personalizada))
-        bot_app.add_handler(CommandHandler("permisos", dar_permisos))
-        bot_app.add_handler(CommandHandler("rol", cambiar_rol))
-        bot_app.add_handler(CommandHandler("addsaldo", recargar_saldo_manual))
-        bot_app.add_handler(CommandHandler("ban", banear_usuario))
-        bot_app.add_handler(CommandHandler("unban", banear_usuario))
-        bot_app.add_handler(CommandHandler("crearcategoria", crear_categoria))
-        bot_app.add_handler(CommandHandler("agregarpanel", agregar_panel_smm))
-        bot_app.add_handler(CommandHandler("editarpanel", editar_panel))
-        bot_app.add_handler(CommandHandler("eliminarpanel", eliminar_panel))
-        bot_app.add_handler(CommandHandler("copiarpanel", copiar_panel))
-        bot_app.add_handler(CommandHandler("actualizar", sincronizar_servicios))
-        bot_app.add_handler(CommandHandler("limite", configurar_limite))
-        bot_app.add_handler(CommandHandler("niveles", ver_niveles))
-        bot_app.add_handler(CommandHandler("respaldo", crear_respaldo))
-        bot_app.add_handler(CommandHandler("buscar", buscar_servicios))
-        bot_app.add_handler(CommandHandler("usarreferido", verificar_referido))
-        bot_app.add_handler(CommandHandler("moneda", cambiar_moneda))
-        bot_app.add_handler(CommandHandler("faq", ver_faq))
-        bot_app.add_handler(CommandHandler("recargar", iniciar_recarga))
-        bot_app.add_handler(CommandHandler("diagnosticar", diagnosticar_panel))
-        bot_app.add_handler(CommandHandler("probar", probar_servicio))
-        bot_app.add_handler(CommandHandler("estadisticas", ver_estadisticas_generales))
-        bot_app.add_handler(CommandHandler("dorks", generar_dorks))
-        bot_app.add_handler(CommandHandler("bin", validar_bin))
-        bot_app.add_handler(CommandHandler("cc", generar_cc))
+    bot_app.add_handler(obtener_conv_pagos())
+    bot_app.add_handler(MessageHandler(filters.PHOTO, subir_foto_bienvenida))
+    bot_app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, recibir_configuracion))
+    bot_app.add_handler(CallbackQueryHandler(manejar_botones))
 
-        # OTROS MANEJADORES
-        bot_app.add_handler(obtener_conv_pagos())
-        bot_app.add_handler(MessageHandler(filters.PHOTO, subir_foto_bienvenida))
-        bot_app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, recibir_configuracion))
-        bot_app.add_handler(CallbackQueryHandler(manejar_botones))
+    await bot_app.bot.delete_webhook(drop_pending_updates=True)
+    print("🔌 Webhook antiguo eliminado")
 
-        # Limpieza total
-        await bot_app.bot.delete_webhook(drop_pending_updates=True)
-        print("🔌 Restos eliminados")
+    async def revisar():
+        while True:
+            await asyncio.sleep(1800)
+            await revisar_estado_paneles(bot_app)
+    asyncio.create_task(revisar())
 
-               # Tarea automática
-        async def revisar():
-            while True:
-                await asyncio.sleep(1800)
-                await revisar_estado_paneles(bot_app)
-        asyncio.create_task(revisar())
-
-        print("✅ VOLTIXPRO CONECTADO Y ESCUCHANDO MENSAJES")
-        # Arranque seguro
-        await bot_app.run_polling(
-            drop_pending_updates=True,
-            close_loop=False
-        )
+    print("✅ VOLTIXPRO CONECTADO Y ESCUCHANDO MENSAJES")
+    await bot_app.run_polling(drop_pending_updates=True, close_loop=False)
 
 if __name__ == "__main__":
-    # Servidor web en segundo plano
+    # Servidor en segundo plano
     hilo_web = Thread(target=iniciar_servidor_web, daemon=True)
     hilo_web.start()
-    print("🌐 Servidor web listo")
+    print("🌐 Servidor web activo")
 
+    # Ejecutamos protegiendo del error de Python 3.14
     try:
         asyncio.run(ejecutar_bot())
     except RuntimeError:
         pass
-
