@@ -6,3 +6,4 @@ requests==2.31.0
 faker==25.0.0
 flask
 certifi==2024.6.2
+nest_asyncio==1.6.0
