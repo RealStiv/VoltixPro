@@ -12,7 +12,7 @@ from telegram.ext import (
     ApplicationBuilder, CommandHandler, ContextTypes,
     CallbackQueryHandler, MessageHandler, filters
 )
-from flask import Flask
+from flask import Flask, request
 import asyncio
 from threading import Thread
 
@@ -53,22 +53,41 @@ from modulos.estadisticas_avanzadas import obtener_estadisticas
 from modulos.personalizacion import cambiar_ajuste, bienvenida_personalizada, subir_foto_bienvenida, obtener_ajuste
 from datetime import datetime
 
+# ── CONFIGURACIÓN ──
 PUERTO = int(os.getenv("PORT", 8080))
+DOMINIO = "https://voltixpro.onrender.com"
+RUTA_WEBHOOK = "/webhook"
+URL_COMPLETA_WEBHOOK = f"{DOMINIO}{RUTA_WEBHOOK}"
+
 servidor = Flask(__name__)
 bot_app = None
+loop_principal = None
 listo = False
 esperando_respuesta = {}
 
 
-# Ruta web solo para que Render no detenga el servicio
+# ── RUTAS DEL SERVIDOR ──
 @servidor.route('/')
 def estado():
-    return "✅ VOLTIXPRO V4 EN LÍNEA Y FUNCIONANDO"
+    return f"✅ VOLTIXPRO V4 ACTIVO | Webhook configurado: {URL_COMPLETA_WEBHOOK}"
+
+@servidor.route(RUTA_WEBHOOK, methods=['GET','POST'])
+def recibir_webhook():
+    global loop_principal, bot_app, listo
+    if request.method == 'POST' and listo and bot_app:
+        try:
+            datos = request.get_json(force=True)
+            actualizacion = Update.de_json(datos, bot_app.bot)
+            asyncio.run_coroutine_threadsafe(bot_app.process_update(actualizacion), loop_principal)
+        except Exception as e:
+            print(f"⚠️ Error procesando webhook: {e}")
+    return "✅ Recibido por Telegram"
 
 def iniciar_servidor():
     servidor.run(host="0.0.0.0", port=PUERTO)
 
 
+# ── FUNCIONES DEL BOT ──
 async def inicio(update: Update, context: ContextTypes.DEFAULT_TYPE):
     args = context.args
     user = update.effective_user
@@ -78,7 +97,6 @@ async def inicio(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await verificar_referido(user.id, codigo)
 
     usuario = coleccion_usuarios.find_one({"user_id": user.id})
-    
     if not usuario:
         codigo_ref = await asignar_codigo_referido(user.id)
         coleccion_usuarios.insert_one({
@@ -126,7 +144,6 @@ async def recibir_configuracion(update: Update, context: ContextTypes.DEFAULT_TY
 async def ver_estadisticas_generales(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != Config.ADMIN_ID:
         return await update.callback_query.answer("❌ Sin permiso", show_alert=True)
-    
     est = await obtener_estadisticas()
     texto = f"""📊 **ESTADÍSTICAS GENERALES**
 
@@ -138,7 +155,6 @@ async def ver_estadisticas_generales(update: Update, context: ContextTypes.DEFAU
 """
     for item in est['mas_vendidos']:
         texto += f"• {item['_id']}: {item['cantidad']} ventas\n"
-
     await update.callback_query.edit_message_text(texto, parse_mode="Markdown", reply_markup=menu_acciones)
 
 
@@ -153,7 +169,6 @@ async def manejar_botones(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await bienvenida_personalizada(update, context)
         else:
             await query.answer("❌ Aún no te unes al canal", show_alert=True)
-
     elif dato == "menu_tienda": await mostrar_categorias(update, context)
     elif dato == "menu_buscar": await query.edit_message_text("🔎 Escribe: /buscar seguidores instagram")
     elif dato == "menu_favoritos": await ver_favoritos(update, context)
@@ -176,7 +191,7 @@ async def manejar_botones(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif dato == "ad_acciones": await query.edit_message_text("📋 ACCIONES RÁPIDAS", reply_markup=menu_acciones)
     elif dato == "pan_agregar": await query.edit_message_text("📝 Escribe: /agregarpanel NOMBRE | URL | CLAVE | PORCENTAJE")
     elif dato == "pan_ver_ids": await ver_ids_paneles(update, context)
-    elif dato == "pan_copiar": await query.edit_message_text("📋 Escribe: /copiarpanel ID_ORIGEN ID_DEL_PANEL")
+    elif dato == "pan_copiar": await query.edit_message_text("📋 Escribe: /copiarpanel ID_ORIGEN ID_DESTINO")
     elif dato == "pan_editar": await query.edit_message_text("✏️ Escribe: /editarpanel ID CAMPO NUEVO_VALOR")
     elif dato == "pan_eliminar": await query.edit_message_text("🗑️ Escribe: /eliminarpanel ID_DEL_PANEL")
     elif dato == "acc_aviso":
@@ -217,13 +232,15 @@ Simplemente envía una foto para ponerla de portada.""")
         await mostrar_servicios(update, context, nombre_cat)
 
 
+# ── ARRANQUE PRINCIPAL ──
 async def iniciar_todo():
-    global bot_app, listo
+    global bot_app, loop_principal, listo
+    loop_principal = asyncio.get_running_loop()
 
-    print("⚙️ Cargando configuración base...")
+    print("⚙️ Preparando base de datos...")
     await iniciar_configuracion()
 
-    print("🤖 Conectando al bot...")
+    print("🤖 Inicializando bot...")
     bot_app = ApplicationBuilder().token(Config.BOT_TOKEN).build()
     await bot_app.initialize()
 
@@ -263,27 +280,32 @@ async def iniciar_todo():
     bot_app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, recibir_configuracion))
     bot_app.add_handler(CallbackQueryHandler(manejar_botones))
 
-    # ELIMINAMOS CUALQUIER WEBHOOK QUE ESTORBE
+    # CONFIGURAMOS SOLO WEBHOOK, SIN POLLING
     await bot_app.bot.delete_webhook(drop_pending_updates=True)
-    print("🔌 Webhook eliminado | Modo Polling directo ACTIVO")
+    await bot_app.bot.set_webhook(
+        url=URL_COMPLETA_WEBHOOK,
+        drop_pending_updates=True,
+        allowed_updates=["message", "edited_message", "callback_query"]
+    )
 
-    # REVISIÓN AUTOMÁTICA
+    listo = True
+    print(f"✅ WEBHOOK ACTIVO Y REGISTRADO: {URL_COMPLETA_WEBHOOK}")
+    print("⚡ VOLTIXPRO V4 LISTO Y RECIBIENDO MENSAJES")
+
+    # Revisión automática
     async def revisar_periodico():
         while True:
             await asyncio.sleep(1800)
             await revisar_estado_paneles(bot_app)
     asyncio.create_task(revisar_periodico())
 
-    listo = True
-    print("✅ VOLTIXPRO V4 ARRANCADO Y ESCUCHANDO TUS MENSAJES")
-
+    # Dejamos el bot arrancado pero SIN Polling
     await bot_app.start()
-    await bot_app.updater.start_polling(drop_pending_updates=True)
 
 
 if __name__ == "__main__":
-    # Servidor web en segundo plano
+    # 1. Servidor Flask en hilo aparte
     hilo = Thread(target=iniciar_servidor, daemon=True)
     hilo.start()
-    # Ejecutamos el bot
+    # 2. Ejecutamos el bucle principal del bot
     asyncio.run(iniciar_todo())
