@@ -271,8 +271,20 @@ if __name__ == "__main__":
                 await revisar_estado_paneles(bot_app)
         asyncio.create_task(revisar())
 
-        print("✅ VOLTIXPRO CONECTADO Y ESCUCHANDO MENSAJES")
-        # Arranque seguro sin conflictos
-        await bot_app.run_polling(drop_pending_updates=True)
+                print("✅ VOLTIXPRO CONECTADO Y ESCUCHANDO MENSAJES")
+        # Opción compatible con todas las versiones
+        try:
+            await bot_app.run_polling(
+                drop_pending_updates=True,
+                close_loop=False
+            )
+        except RuntimeError:
+            pass
+        except KeyboardInterrupt:
+            pass
 
-    asyncio.run(ejecutar_bot())
+if __name__ == "__main__":
+    try:
+        asyncio.run(ejecutar_bot())
+    except RuntimeError:
+        pass
