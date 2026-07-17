@@ -60,7 +60,7 @@ def activo():
 @servidor.route('/webhook', methods=['GET','POST'])
 def recibir():
     global loop_principal, bot_app, listo
-    if request.method == 'POST" and listo:
+    if request.method == 'POST' and listo:
         try:
             datos = request.get_json()
             print(f"📥 LLEGÓ ACCIÓN: {list(datos.keys())}")
