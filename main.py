@@ -211,14 +211,23 @@ Simplemente envía una foto para ponerla de portada.""")
         await mostrar_servicios(update, context, nombre_cat)
 
 
-# ── ARRANQUE DEL BOT ──
-async def arrancar_bot():
+# ── ARRANQUE PRINCIPAL ──
+def main():
+    # Servidor web en segundo plano
+    hilo_web = Thread(target=arrancar_web, daemon=True)
+    hilo_web.start()
+
     print("⚙️ Conectando base de datos...")
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    loop.run_until_complete(iniciar_todo_bot())
+
+
+async def iniciar_todo_bot():
     await iniciar_configuracion()
 
     print("🤖 Conectando con Telegram...")
     bot_app = ApplicationBuilder().token(Config.BOT_TOKEN).build()
-    await bot_app.initialize()
 
     # REGISTRO DE TODOS LOS COMANDOS
     bot_app.add_handler(CommandHandler("start", inicio))
@@ -256,7 +265,7 @@ async def arrancar_bot():
     bot_app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, recibir_configuracion))
     bot_app.add_handler(CallbackQueryHandler(manejar_botones))
 
-    # ELIMINAMOS CUALQUIER RESTO DE WEBHOOK
+    # ELIMINAMOS RESTOS DE WEBHOOK
     await bot_app.bot.delete_webhook(drop_pending_updates=True)
     print("🔌 Restos de webhook eliminados")
 
@@ -268,7 +277,7 @@ async def arrancar_bot():
     asyncio.create_task(revisar_periodico())
 
     print("✅ TODO LISTO: AHORA ESCUCHANDO TUS MENSAJES")
-    # ARRANQUE DEFINITIVO
+    # ARRANQUE DEFINITIVO SIN CONFLICTOS
     await bot_app.run_polling(
         drop_pending_updates=True,
         poll_interval=1.0,
@@ -277,8 +286,4 @@ async def arrancar_bot():
 
 
 if __name__ == "__main__":
-    # Servidor web en segundo plano
-    hilo_web = Thread(target=arrancar_web, daemon=True)
-    hilo_web.start()
-    # Ejecutamos el bot como proceso principal
-    asyncio.run(arrancar_bot())
+    main()
