@@ -264,27 +264,28 @@ if __name__ == "__main__":
         await bot_app.bot.delete_webhook(drop_pending_updates=True)
         print("🔌 Restos eliminados")
 
-        # Tarea automática
+               # Tarea automática
         async def revisar():
             while True:
                 await asyncio.sleep(1800)
                 await revisar_estado_paneles(bot_app)
         asyncio.create_task(revisar())
 
-                print("✅ VOLTIXPRO CONECTADO Y ESCUCHANDO MENSAJES")
-        # Opción compatible con todas las versiones
-        try:
-            await bot_app.run_polling(
-                drop_pending_updates=True,
-                close_loop=False
-            )
-        except RuntimeError:
-            pass
-        except KeyboardInterrupt:
-            pass
+        print("✅ VOLTIXPRO CONECTADO Y ESCUCHANDO MENSAJES")
+        # Arranque seguro
+        await bot_app.run_polling(
+            drop_pending_updates=True,
+            close_loop=False
+        )
 
 if __name__ == "__main__":
+    # Servidor web en segundo plano
+    hilo_web = Thread(target=iniciar_servidor_web, daemon=True)
+    hilo_web.start()
+    print("🌐 Servidor web listo")
+
     try:
         asyncio.run(ejecutar_bot())
     except RuntimeError:
         pass
+
