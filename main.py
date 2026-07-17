@@ -12,7 +12,7 @@ from telegram.ext import (
     ApplicationBuilder, CommandHandler, ContextTypes,
     CallbackQueryHandler, MessageHandler, filters
 )
-from flask import Flask, request
+from flask import Flask
 import asyncio
 from threading import Thread
 
@@ -55,37 +55,16 @@ from datetime import datetime
 
 # ── CONFIGURACIÓN ──
 PUERTO = int(os.getenv("PORT", 8080))
-DOMINIO = "https://voltixpro.onrender.com"
-RUTA_WEBHOOK = "/webhook"
-URL_COMPLETA_WEBHOOK = f"{DOMINIO}{RUTA_WEBHOOK}"
-
 servidor = Flask(__name__)
-bot_app = None
-loop_principal = None
-listo = False
 esperando_respuesta = {}
 
-
-# ── RUTAS DEL SERVIDOR ──
+# ── RUTA SOLO PARA QUE RENDER NO SE DETENGA ──
 @servidor.route('/')
 def estado():
-    return f"✅ VOLTIXPRO V4 ACTIVO | Webhook configurado: {URL_COMPLETA_WEBHOOK}"
+    return "✅ VOLTIXPRO V4 | MODO CONEXIÓN DIRECTA ACTIVO"
 
-@servidor.route(RUTA_WEBHOOK, methods=['GET','POST'])
-def recibir_webhook():
-    global loop_principal, bot_app, listo
-    if request.method == 'POST' and listo and bot_app:
-        try:
-            datos = request.get_json(force=True)
-            actualizacion = Update.de_json(datos, bot_app.bot)
-            asyncio.run_coroutine_threadsafe(bot_app.process_update(actualizacion), loop_principal)
-        except Exception as e:
-            print(f"⚠️ Error procesando webhook: {e}")
-    return "✅ Recibido por Telegram"
-
-def iniciar_servidor():
+def arrancar_web():
     servidor.run(host="0.0.0.0", port=PUERTO)
-
 
 # ── FUNCIONES DEL BOT ──
 async def inicio(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -162,7 +141,7 @@ async def manejar_botones(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     dato = query.data.strip()
     await query.answer()
-    print(f"🔘 Botón presionado: {dato}")
+    print(f"🔘 Acción recibida: {dato}")
 
     if dato == "verificar_suscripcion":
         if await verificar_suscripcion(update, context):
@@ -182,7 +161,7 @@ async def manejar_botones(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if update.effective_user.id == Config.ADMIN_ID:
             await query.edit_message_text("⚙️ PANEL DE ADMINISTRACIÓN", reply_markup=menu_admin)
         else:
-            await query.answer("❌ Solo el administrador puede entrar", show_alert=True)
+            await query.answer("❌ Solo el administrador", show_alert=True)
     elif dato == "ad_salir": await bienvenida_personalizada(update, context)
     elif dato == "ad_usuarios": await query.edit_message_text("👥 GESTIÓN DE USUARIOS", reply_markup=menu_usuarios)
     elif dato == "ad_categorias": await query.edit_message_text("📂 GESTIÓN DE CATEGORÍAS", reply_markup=menu_categorias)
@@ -217,7 +196,7 @@ async def manejar_botones(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 Comandos disponibles:
 /cambiar nombre_bot Tu Nombre
-/cambiar emoji_principal ⚡
+/cambiar emoji ⚡
 /cambiar mensaje_bienvenida Hola...
 /cambiar pie_pagina © 2026 Tu Marca
 /cambiar reglas 1. Regla uno...
@@ -232,19 +211,16 @@ Simplemente envía una foto para ponerla de portada.""")
         await mostrar_servicios(update, context, nombre_cat)
 
 
-# ── ARRANQUE PRINCIPAL ──
-async def iniciar_todo():
-    global bot_app, loop_principal, listo
-    loop_principal = asyncio.get_running_loop()
-
-    print("⚙️ Preparando base de datos...")
+# ── ARRANQUE DEL BOT ──
+async def arrancar_bot():
+    print("⚙️ Conectando base de datos...")
     await iniciar_configuracion()
 
-    print("🤖 Inicializando bot...")
+    print("🤖 Conectando con Telegram...")
     bot_app = ApplicationBuilder().token(Config.BOT_TOKEN).build()
     await bot_app.initialize()
 
-    # TODOS LOS COMANDOS
+    # REGISTRO DE TODOS LOS COMANDOS
     bot_app.add_handler(CommandHandler("start", inicio))
     bot_app.add_handler(CommandHandler("cambiar", cambiar_ajuste))
     bot_app.add_handler(CommandHandler("bienvenida", bienvenida_personalizada))
@@ -268,44 +244,41 @@ async def iniciar_todo():
     bot_app.add_handler(CommandHandler("faq", ver_faq))
     bot_app.add_handler(CommandHandler("recargar", iniciar_recarga))
     bot_app.add_handler(CommandHandler("diagnosticar", diagnosticar_panel))
-    bot_app.add_handler(CommandHandler("pruebaservicio", probar_servicio))
+    bot_app.add_handler(CommandHandler("probar", probar_servicio))
     bot_app.add_handler(CommandHandler("estadisticas", ver_estadisticas_generales))
     bot_app.add_handler(CommandHandler("dorks", generar_dorks))
     bot_app.add_handler(CommandHandler("bin", validar_bin))
     bot_app.add_handler(CommandHandler("cc", generar_cc))
 
-    # MENSAJES Y BOTONES
+    # OTROS MENSAJES
     bot_app.add_handler(obtener_conv_pagos())
     bot_app.add_handler(MessageHandler(filters.PHOTO, subir_foto_bienvenida))
     bot_app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, recibir_configuracion))
     bot_app.add_handler(CallbackQueryHandler(manejar_botones))
 
-    # CONFIGURAMOS SOLO WEBHOOK, SIN POLLING
+    # ELIMINAMOS CUALQUIER RESTO DE WEBHOOK
     await bot_app.bot.delete_webhook(drop_pending_updates=True)
-    await bot_app.bot.set_webhook(
-        url=URL_COMPLETA_WEBHOOK,
-        drop_pending_updates=True,
-        allowed_updates=["message", "edited_message", "callback_query"]
-    )
+    print("🔌 Restos de webhook eliminados")
 
-    listo = True
-    print(f"✅ WEBHOOK ACTIVO Y REGISTRADO: {URL_COMPLETA_WEBHOOK}")
-    print("⚡ VOLTIXPRO V4 LISTO Y RECIBIENDO MENSAJES")
-
-    # Revisión automática
+    # TAREAS AUTOMÁTICAS
     async def revisar_periodico():
         while True:
             await asyncio.sleep(1800)
             await revisar_estado_paneles(bot_app)
     asyncio.create_task(revisar_periodico())
 
-    # Dejamos el bot arrancado pero SIN Polling
-    await bot_app.start()
+    print("✅ TODO LISTO: AHORA ESCUCHANDO TUS MENSAJES")
+    # ARRANQUE DEFINITIVO
+    await bot_app.run_polling(
+        drop_pending_updates=True,
+        poll_interval=1.0,
+        timeout=30
+    )
 
 
 if __name__ == "__main__":
-    # 1. Servidor Flask en hilo aparte
-    hilo = Thread(target=iniciar_servidor, daemon=True)
-    hilo.start()
-    # 2. Ejecutamos el bucle principal del bot
-    asyncio.run(iniciar_todo())
+    # Servidor web en segundo plano
+    hilo_web = Thread(target=arrancar_web, daemon=True)
+    hilo_web.start()
+    # Ejecutamos el bot como proceso principal
+    asyncio.run(arrancar_bot())
