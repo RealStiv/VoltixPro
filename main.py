@@ -1,9 +1,7 @@
 import sys
 import warnings
 import os
-import asyncio
-from threading import Thread
-
+import certifi
 warnings.filterwarnings("ignore")
 
 from dotenv import load_dotenv
@@ -15,6 +13,8 @@ from telegram.ext import (
     CallbackQueryHandler, MessageHandler, filters
 )
 from flask import Flask
+import asyncio
+from threading import Thread
 
 print("⚡ INICIANDO VOLTIXPRO V4...")
 
@@ -53,22 +53,22 @@ from modulos.estadisticas_avanzadas import obtener_estadisticas
 from modulos.personalizacion import cambiar_ajuste, bienvenida_personalizada, subir_foto_bienvenida, obtener_ajuste
 from datetime import datetime
 
-# ── CONFIGURACIONES ──
 PUERTO = int(os.getenv("PORT", 8080))
 servidor = Flask(__name__)
 bot_app = None
 listo = False
 esperando_respuesta = {}
 
-# ── RUTAS WEB SOLO PARA QUE RENDER NO SE DETENGA ──
+
+# Ruta web solo para que Render no detenga el servicio
 @servidor.route('/')
 def estado():
-    return "✅ VOLTIXPRO V4 EN LÍNEA"
+    return "✅ VOLTIXPRO V4 EN LÍNEA Y FUNCIONANDO"
 
-def arrancar_servidor_web():
+def iniciar_servidor():
     servidor.run(host="0.0.0.0", port=PUERTO)
 
-# ── FUNCIONES DEL BOT ──
+
 async def inicio(update: Update, context: ContextTypes.DEFAULT_TYPE):
     args = context.args
     user = update.effective_user
@@ -78,6 +78,7 @@ async def inicio(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await verificar_referido(user.id, codigo)
 
     usuario = coleccion_usuarios.find_one({"user_id": user.id})
+    
     if not usuario:
         codigo_ref = await asignar_codigo_referido(user.id)
         coleccion_usuarios.insert_one({
@@ -125,6 +126,7 @@ async def recibir_configuracion(update: Update, context: ContextTypes.DEFAULT_TY
 async def ver_estadisticas_generales(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != Config.ADMIN_ID:
         return await update.callback_query.answer("❌ Sin permiso", show_alert=True)
+    
     est = await obtener_estadisticas()
     texto = f"""📊 **ESTADÍSTICAS GENERALES**
 
@@ -136,6 +138,7 @@ async def ver_estadisticas_generales(update: Update, context: ContextTypes.DEFAU
 """
     for item in est['mas_vendidos']:
         texto += f"• {item['_id']}: {item['cantidad']} ventas\n"
+
     await update.callback_query.edit_message_text(texto, parse_mode="Markdown", reply_markup=menu_acciones)
 
 
@@ -173,7 +176,7 @@ async def manejar_botones(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif dato == "ad_acciones": await query.edit_message_text("📋 ACCIONES RÁPIDAS", reply_markup=menu_acciones)
     elif dato == "pan_agregar": await query.edit_message_text("📝 Escribe: /agregarpanel NOMBRE | URL | CLAVE | PORCENTAJE")
     elif dato == "pan_ver_ids": await ver_ids_paneles(update, context)
-    elif dato == "pan_copiar": await query.edit_message_text("📋 Escribe: /copiarpanel ID_ORIGEN ID_DESTINO")
+    elif dato == "pan_copiar": await query.edit_message_text("📋 Escribe: /copiarpanel ID_ORIGEN ID_DEL_PANEL")
     elif dato == "pan_editar": await query.edit_message_text("✏️ Escribe: /editarpanel ID CAMPO NUEVO_VALOR")
     elif dato == "pan_eliminar": await query.edit_message_text("🗑️ Escribe: /eliminarpanel ID_DEL_PANEL")
     elif dato == "acc_aviso":
@@ -214,16 +217,17 @@ Simplemente envía una foto para ponerla de portada.""")
         await mostrar_servicios(update, context, nombre_cat)
 
 
-async def arrancar_bot():
+async def iniciar_todo():
     global bot_app, listo
-    print("⚙️ Preparando base de datos...")
+
+    print("⚙️ Cargando configuración base...")
     await iniciar_configuracion()
 
     print("🤖 Conectando al bot...")
     bot_app = ApplicationBuilder().token(Config.BOT_TOKEN).build()
     await bot_app.initialize()
 
-    # REGISTRAR TODOS LOS COMANDOS
+    # TODOS LOS COMANDOS
     bot_app.add_handler(CommandHandler("start", inicio))
     bot_app.add_handler(CommandHandler("cambiar", cambiar_ajuste))
     bot_app.add_handler(CommandHandler("bienvenida", bienvenida_personalizada))
@@ -261,9 +265,9 @@ async def arrancar_bot():
 
     # ELIMINAMOS CUALQUIER WEBHOOK QUE ESTORBE
     await bot_app.bot.delete_webhook(drop_pending_updates=True)
-    print("🔌 Webhook eliminado → Modo Polling activo")
+    print("🔌 Webhook eliminado | Modo Polling directo ACTIVO")
 
-    # TAREAS AUTOMÁTICAS
+    # REVISIÓN AUTOMÁTICA
     async def revisar_periodico():
         while True:
             await asyncio.sleep(1800)
@@ -271,20 +275,15 @@ async def arrancar_bot():
     asyncio.create_task(revisar_periodico())
 
     listo = True
-    print("✅ VOLTIXPRO V4 ARRANCADO Y ESCUCHANDO")
+    print("✅ VOLTIXPRO V4 ARRANCADO Y ESCUCHANDO TUS MENSAJES")
 
-    # MANTENEMOSLO VIVO
     await bot_app.start()
-    await bot_app.updater.start_polling(
-        drop_pending_updates=True,
-        poll_interval=1.0,
-        timeout=30
-    )
+    await bot_app.updater.start_polling(drop_pending_updates=True)
 
 
 if __name__ == "__main__":
-    # 1. Arrancamos servidor web en segundo plano
-    hilo_web = Thread(target=arrancar_servidor_web, daemon=True)
-    hilo_web.start()
-    # 2. Arrancamos el bot en el hilo principal
-    asyncio.run(arrancar_bot())
+    # Servidor web en segundo plano
+    hilo = Thread(target=iniciar_servidor, daemon=True)
+    hilo.start()
+    # Ejecutamos el bot
+    asyncio.run(iniciar_todo())
