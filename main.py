@@ -219,7 +219,7 @@ async def estadisticas_base():
 obtener_estadisticas = estadisticas_base
 
 # ==================================================
-# 📂 IMPORTACIONES SIN src
+# 📂 IMPORTACIONES CORREGIDAS
 # ==================================================
 log("📂 Cargando módulos...", "PASO")
 try:
@@ -239,8 +239,9 @@ try:
         copiar_panel, alternar_mantenimiento, crear_respaldo,
         configurar_limite, ver_niveles
     )
-    from modulos.api.gestor_paneles import agregar_panel_smm, ver_ids_paneles, editar_panel, eliminar_panel
-    from modulos.api.importar_servicios import importar_desde_api
+    # Ruta correcta: api está afuera de modulos
+    from api.gestor_paneles import agregar_panel_smm, ver_ids_paneles, editar_panel, eliminar_panel
+    from api.importar_servicios import importar_desde_api
     from modulos.auditoria import ver_historial
     from modulos.niveles_limites import calcular_nivel_usuario, verificar_limite_gasto
     from modulos.alertas import revisar_estado_paneles
@@ -403,7 +404,6 @@ async def manejar_botones(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif dato == "acc_aviso": await q.edit_message_text("📢 Escribe mensaje para todos los usuarios", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Volver", callback_data="ad_acciones")]]))
     elif dato == "acc_historial": await q.edit_message_text("📜 Historial completo", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Volver", callback_data="ad_acciones")]]))
     elif dato == "acc_respaldo":
-        # Eliminamos el viejo y enviamos nuevo para que no se superponga
         await q.delete_message()
         await context.bot.send_message(uid, "💾 Creando respaldo completo...", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Volver", callback_data="ad_acciones")]]))
     elif dato == "acc_mantenimiento": await q.edit_message_text("🚧 Modo mantenimiento activado/desactivado", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Volver", callback_data="ad_acciones")]]))
@@ -427,7 +427,6 @@ async def arrancar_bot():
     except Exception as e: log(f"❌ BD: {e}", "ERROR"); return
 
     app = ApplicationBuilder().token(BOT_TOKEN).build()
-    # ELIMINA CUALQUIER OTRA CONEXIÓN ANTES DE ARRANCAR
     await app.bot.delete_webhook(drop_pending_updates=True)
     log("🔌 Conexiones antiguas eliminadas", "EXITO")
 
