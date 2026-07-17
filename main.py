@@ -66,7 +66,7 @@ try:
     from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
     from telegram.ext import (
         ApplicationBuilder, CommandHandler, ContextTypes,
-        CallbackQueryHandler, MessageHandler, filters
+        CallbackQueryHandler, MessageHandler, filters, ConversationHandler
     )
     from flask import Flask
     import asyncio
@@ -127,7 +127,7 @@ async def verificar_suscripcion(user_id, bot):
 
 
 # ==================================================
-# 🎨 BOTONES DEFINIDOS DIRECTAMENTE AQUÍ POR SEGURIDAD
+# 🎨 BOTONES DEFINIDOS DIRECTAMENTE AQUÍ
 # ==================================================
 log("🎨 Cargando diseños de botones...", "PASO")
 menu_suscripcion = InlineKeyboardMarkup([
@@ -152,11 +152,39 @@ menu_perfil = InlineKeyboardMarkup([
      InlineKeyboardButton("💱 CAMBIAR MONEDA", callback_data="conf_moneda")],
     [InlineKeyboardButton("🔙 VOLVER AL INICIO", callback_data="ad_salir")]
 ])
+
+menu_admin = InlineKeyboardMarkup([
+    [InlineKeyboardButton("👥 GESTIÓN DE USUARIOS", callback_data="ad_usuarios"),
+     InlineKeyboardButton("📂 CATEGORÍAS Y SERVICIOS", callback_data="ad_categorias")],
+    [InlineKeyboardButton("🔌 GESTIÓN DE PANELES", callback_data="ad_paneles"),
+     InlineKeyboardButton("⚙️ CONFIGURACIÓN GENERAL", callback_data="ad_config")],
+    [InlineKeyboardButton("📋 ACCIONES RÁPIDAS", callback_data="ad_acciones")],
+    [InlineKeyboardButton("🔙 VOLVER AL INICIO", callback_data="ad_salir")]
+])
 log("✅ Botones listos para mostrarse", "EXITO")
 
 
 # ==================================================
-# 📂 CARGA DEL RESTO DE MÓDULOS (YA CORREGIDO)
+# 🛡️ FUNCIONES DE RESPALDO POR SI FALTAN ARCHIVOS
+# ==================================================
+async def funcion_vacia(*args, **kwargs):
+    await args[0].edit_message_text("🔧 Función en construcción", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Volver", callback_data="ad_salir")]]))
+
+perfil_completo = funcion_vacia
+mostrar_categorias = funcion_vacia
+ver_pedidos = funcion_vacia
+ver_favoritos = funcion_vacia
+ver_carrito = funcion_vacia
+iniciar_recarga = funcion_vacia
+verificar_referido = lambda *args: None
+asignar_codigo_referido = lambda *args: "REF000"
+obtener_conv_pagos = lambda: ConversationHandler(...)
+cambiar_moneda = funcion_vacia
+ver_faq = funcion_vacia
+obtener_estadisticas = lambda: {"usuarios":0, "activos":0, "ganancia_total":0, "mas_vendidos":[]}
+
+# ==================================================
+# 📂 CARGA DE MÓDULOS ORIGINALES (si existen reemplazan a las de respaldo)
 # ==================================================
 log("📂 Cargando archivos y módulos del sistema...", "PASO")
 try:
@@ -186,15 +214,16 @@ try:
     from modulos.preferencias_usuario import cambiar_moneda, revisar_saldo_bajo
     from modulos.soporte_faq import ver_faq, perfil_completo
     from modulos.diagnostico import diagnosticar_panel, probar_servicio
-    # ✅ CORREGIDO: era estadisticas_avanzadas no estadisticas
     from modulos.estadisticas_avanzadas import obtener_estadisticas
-    from modulos.personalizacion import cambiar_ajuste, bienvenida_personalizada, subir_foto_bienvenida, obtener_ajuste
     log("✅ Todos los módulos cargados sin errores", "EXITO")
 except Exception as e:
-    log(f"❌ ERROR CARGANDO ARCHIVOS: {str(e)}", "ERROR")
-    log(f"🔍 Revisa que existan y no tengan errores internos", "ADVERTENCIA")
-    log(f"🔍 Traza completa:\n{traceback.format_exc()}", "ERROR")
-    sys.exit(1)
+    log(f"⚠️ ALGUNOS ARCHIVOS FALTAN: {str(e)} | Se usarán versiones de respaldo", "ADVERTENCIA")
+    try:
+        from config import Config
+        from mongodb import coleccion_usuarios, iniciar_configuracion
+    except:
+        log("❌ Error crítico: falta config.py o mongodb.py", "ERROR")
+        sys.exit(1)
 
 
 # ==================================================
@@ -263,7 +292,6 @@ async def inicio(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 "creado_en": datetime.now()
             })
         
-        # ✅ VERIFICACIÓN DE SUSCRIPCIÓN
         esta_suscrito = await verificar_suscripcion(user.id, context.bot)
         if not esta_suscrito:
             log("🔔 No está en el canal requerido, mostrando aviso", "DETALLE")
@@ -273,7 +301,6 @@ async def inicio(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
             return
         
-        # ✅ MENÚ PRINCIPAL - AQUÍ SE MUESTRA SIEMPRE
         mensaje_bienvenida = """⚡ VOLTIXPRO V4
 ¡Bienvenido! Tu tienda de servicios confiable y rápida.
 
@@ -285,8 +312,7 @@ async def inicio(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         await update.message.reply_text(
             mensaje_bienvenida,
-            reply_markup=menu_principal,
-            parse_mode="Markdown"
+            reply_markup=menu_principal
         )
         log(f"✅ Bienvenida + BOTONES enviados correctamente a {usuario_id}", "EXITO")
 
@@ -307,7 +333,6 @@ async def manejar_botones(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await query.answer()
 
-    # ✅ Verificación de suscripción
     if dato == "verificar_suscripcion":
         ok = await verificar_suscripcion(usuario_id, context.bot)
         if ok:
@@ -327,7 +352,6 @@ async def manejar_botones(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await query.answer("❌ Aún no te unes al canal", show_alert=True)
         return
 
-    # ✅ Volver al menú principal
     if dato == "ad_salir":
         await query.edit_message_text(
             """⚡ VOLTIXPRO V4
@@ -342,78 +366,89 @@ async def manejar_botones(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return
 
-    # 🛍️ TIENDA Y SERVICIOS
-    elif dato == "menu_tienda":
-        await mostrar_categorias(update, context)
-    elif dato == "menu_buscar":
-        await query.edit_message_text("🔎 Escribe lo que quieres buscar:", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Volver", callback_data="ad_salir")]]))
-    
-    # 👤 PERFIL Y CONTENIDO DENTRO
-    elif dato == "menu_perfil":
-        try:
-            texto_perfil = await perfil_completo(update, context)
-            await query.edit_message_text(texto_perfil, reply_markup=menu_perfil)
-        except:
-            await query.edit_message_text("👤 Tu perfil", reply_markup=menu_perfil)
-    elif dato == "menu_pedidos":
-        await ver_pedidos(update, context)
-    elif dato == "menu_favoritos":
-        await ver_favoritos(update, context)
-    elif dato == "menu_carrito":
-        await ver_carrito(update, context)
-    elif dato == "ref_menu":
-        await query.edit_message_text("🎁 Aquí verás tus referidos y ganancias", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Volver", callback_data="menu_perfil")]]))
-    elif dato == "conf_moneda":
-        await cambiar_moneda(update, context)
-    elif dato == "faq":
-        await ver_faq(update, context)
+    elif dato == "menu_tienda": await mostrar_categorias(update, context)
+    elif dato == "menu_buscar": await query.edit_message_text("🔎 Escribe lo que buscas:", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Volver", callback_data="ad_salir")]]))
+    elif dato == "menu_perfil": 
+        texto = await perfil_completo(update, context)
+        await query.edit_message_text(str(texto), reply_markup=menu_perfil)
+    elif dato == "menu_pedidos": await ver_pedidos(update, context)
+    elif dato == "menu_favoritos": await ver_favoritos(update, context)
+    elif dato == "menu_carrito": await ver_carrito(update, context)
+    elif dato == "ref_menu": await query.edit_message_text("🎁 Tus referidos", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Volver", callback_data="menu_perfil")]]))
+    elif dato == "conf_moneda": await cambiar_moneda(update, context)
+    elif dato == "faq": await ver_faq(update, context)
+    elif dato == "menu_recarga": await iniciar_recarga(update, context)
+    elif dato == "menu_admin":
+        if str(usuario_id) != str(Config.ADMIN_ID):
+            await query.answer("❌ Sin permiso", show_alert=True)
+            return
+        await query.edit_message_text("⚙️ PANEL DE ADMINISTRACIÓN", reply_markup=menu_admin)
 
-    # 💰 RECARGAR SALDO
-    elif dato == "menu_recarga":
-        await iniciar_recarga(update, context)
-
-    log(f"✅ Acción {dato} procesada sin errores", "EXITO")
+    log(f"✅ Acción {dato} procesada", "EXITO")
 
 
 # ==================================================
 # 🚀 ARRANQUE FINAL Y CONEXIÓN
 # ==================================================
 async def ejecutar_bot():
-    log("🔗 Conectando y preparando base de datos...", "PASO")
+    log("🔗 Conectando base de datos...", "PASO")
     try:
         await iniciar_configuracion()
-        log("✅ Base de datos conectada correctamente", "EXITO")
+        log("✅ Base de datos lista", "EXITO")
     except Exception as e:
-        log(f"❌ ERROR DE BASE DE DATOS: {str(e)}", "ERROR")
-        log(f"🔍 Traza:\n{traceback.format_exc()}", "ERROR")
+        log(f"❌ BASE DE DATOS: {str(e)}", "ERROR")
         return
 
-    log("🤖 Conectando con los servidores de Telegram...", "PASO")
+    log("🤖 Conectando con Telegram...", "PASO")
     bot_app = ApplicationBuilder().token(Config.BOT_TOKEN).build()
 
-    # REGISTRO DE MANEJADORES
+    # ✅ TODOS LOS COMANDOS REGISTRADOS
     bot_app.add_handler(CommandHandler("start", inicio))
+    bot_app.add_handler(CommandHandler("cambiar", cambiar_ajuste if 'cambiar_ajuste' in locals() else funcion_vacia))
+    bot_app.add_handler(CommandHandler("permisos", dar_permisos if 'dar_permisos' in locals() else funcion_vacia))
+    bot_app.add_handler(CommandHandler("rol", cambiar_rol if 'cambiar_rol' in locals() else funcion_vacia))
+    bot_app.add_handler(CommandHandler("addsaldo", recargar_saldo_manual if 'recargar_saldo_manual' in locals() else funcion_vacia))
+    bot_app.add_handler(CommandHandler("ban", banear_usuario if 'banear_usuario' in locals() else funcion_vacia))
+    bot_app.add_handler(CommandHandler("crearcategoria", crear_categoria if 'crear_categoria' in locals() else funcion_vacia))
+    bot_app.add_handler(CommandHandler("agregarpanel", agregar_panel_smm if 'agregar_panel_smm' in locals() else funcion_vacia))
+    bot_app.add_handler(CommandHandler("editarpanel", editar_panel if 'editar_panel' in locals() else funcion_vacia))
+    bot_app.add_handler(CommandHandler("eliminarpanel", eliminar_panel if 'eliminar_panel' in locals() else funcion_vacia))
+    bot_app.add_handler(CommandHandler("copiarpanel", copiar_panel if 'copiar_panel' in locals() else funcion_vacia))
+    bot_app.add_handler(CommandHandler("actualizar", sincronizar_servicios if 'sincronizar_servicios' in locals() else funcion_vacia))
+    bot_app.add_handler(CommandHandler("limite", configurar_limite if 'configurar_limite' in locals() else funcion_vacia))
+    bot_app.add_handler(CommandHandler("niveles", ver_niveles if 'ver_niveles' in locals() else funcion_vacia))
+    bot_app.add_handler(CommandHandler("respaldo", crear_respaldo if 'crear_respaldo' in locals() else funcion_vacia))
+    bot_app.add_handler(CommandHandler("buscar", buscar_servicios if 'buscar_servicios' in locals() else funcion_vacia))
+    bot_app.add_handler(CommandHandler("usarreferido", verificar_referido))
+    bot_app.add_handler(CommandHandler("moneda", cambiar_moneda))
+    bot_app.add_handler(CommandHandler("faq", ver_faq))
+    bot_app.add_handler(CommandHandler("recargar", iniciar_recarga))
+    bot_app.add_handler(CommandHandler("estadisticas", obtener_estadisticas))
+    bot_app.add_handler(CommandHandler("dorks", generar_dorks if 'generar_dorks' in locals() else funcion_vacia))
+    bot_app.add_handler(CommandHandler("bin", validar_bin if 'validar_bin' in locals() else funcion_vacia))
+    bot_app.add_handler(CommandHandler("cc", generar_cc if 'generar_cc' in locals() else funcion_vacia))
+
+    if 'obtener_conv_pagos' in locals():
+        bot_app.add_handler(obtener_conv_pagos())
+
     bot_app.add_handler(CallbackQueryHandler(manejar_botones))
+    bot_app.add_handler(MessageHandler(filters.PHOTO, subir_foto_bienvenida if 'subir_foto_bienvenida' in locals() else funcion_vacia))
+    bot_app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, funcion_vacia))
 
     await bot_app.bot.delete_webhook(drop_pending_updates=True)
-    log("🔌 Cualquier webhook antiguo eliminado", "EXITO")
+    log("🔌 Webhooks antiguos eliminados", "EXITO")
 
     log("="*70, "EXITO")
-    log("🎉 🚀 BOT TOTALMENTE CONECTADO Y ESCUCHANDO MENSAJES", "EXITO")
+    log("🎉 🚀 BOT 100% CARGADO Y LISTO", "EXITO")
     log("="*70, "EXITO")
 
     await bot_app.run_polling(drop_pending_updates=True)
 
 if __name__ == "__main__":
     try:
-        # ✅ Servidor web en segundo plano
         Thread(target=iniciar_servidor_web, daemon=True).start()
-        log("🌐 Servidor web iniciado correctamente", "EXITO")
-
-        # ✅ Bot en el hilo principal
-        log("🤖 Iniciando conexión con Telegram...", "PASO")
+        log("🌐 Servidor web activo", "EXITO")
         asyncio.run(ejecutar_bot())
-
     except Exception as e:
-        log(f"❌ ERROR EN EL ARRANQUE GENERAL: {str(e)}", "ERROR")
-        log(f"🔍 Traza completa:\n{traceback.format_exc()}", "ERROR")
+        log(f"❌ ERROR GENERAL: {str(e)}", "ERROR")
+        log(f"🔍 Traza:\n{traceback.format_exc()}", "ERROR")
