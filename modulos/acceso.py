@@ -7,15 +7,17 @@ async def verificar_suscripcion(update, context):
     if not user:
         return False
 
-    # Primero revisamos si está bloqueado
+    # Revisa si está bloqueado primero
     usuario = coleccion_usuarios.find_one({"user_id": user.id})
     if usuario and usuario.get("baneado", False):
         await update.message.reply_text("❌ Tu acceso ha sido bloqueado por el administrador")
         return False
 
-    # Luego verificamos la suscripción al canal
+    # Verifica suscripción al canal
     try:
-        miembro = await context.bot.get_chat_member(chat_id=f"@{Config.CANAL_OBLIGATORIO}", user_id=user.id)
+        canal_id = f"@{Config.CANAL_OBLIGATORIO.strip()}"
+        miembro = await context.bot.get_chat_member(chat_id=canal_id, user_id=user.id)
+        # Estados que SÍ permiten entrada
         estados_validos = [
             ChatMember.MEMBER,
             ChatMember.ADMINISTRATOR,
@@ -23,5 +25,5 @@ async def verificar_suscripcion(update, context):
         ]
         return miembro.status in estados_validos
     except Exception as error:
-        print(f"Error al verificar suscripción: {error}")
+        print(f"Error al verificar: {error}")
         return False
