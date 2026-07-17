@@ -59,10 +59,10 @@ PUERTO = int(os.getenv("PORT", 8080))
 servidor = Flask(__name__)
 esperando_respuesta = {}
 
-# Ruta para mantener el servicio activo en Render
+# Ruta para que Render no apague el servicio
 @servidor.route('/')
 def estado():
-    return "✅ VOLTIXPRO V4 | ACTIVO Y CONECTADO"
+    return "✅ VOLTIXPRO V4 | ACTIVO Y ESCUCHANDO MENSAJES"
 
 def arrancar_web():
     servidor.run(host="0.0.0.0", port=PUERTO, use_reloader=False)
@@ -259,7 +259,7 @@ def iniciar():
         bot_app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, recibir_configuracion))
         bot_app.add_handler(CallbackQueryHandler(manejar_botones))
 
-        # Limpieza total
+        # Limpieza total ya confirmada
         await bot_app.bot.delete_webhook(drop_pending_updates=True)
         print("🔌 Webhook antiguo eliminado")
 
@@ -271,7 +271,7 @@ def iniciar():
         asyncio.create_task(revisar())
 
         print("✅ VOLTIXPRO CONECTADO Y ESCUCHANDO MENSAJES")
-        # Solución definitiva al error del bucle
+        # Arranque definitivo sin errores
         await bot_app.run_polling(
             drop_pending_updates=True,
             close_loop=False,
