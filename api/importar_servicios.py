@@ -1,117 +1,121 @@
-import re
 import aiohttp
 from datetime import datetime
-from mongodb import coleccion_servicios, coleccion_paneles, coleccion_categorias
-from margenes import calcular_precios
-from modulos.tienda_categorias import clasificar_servicio
-
+from mongodb import coleccion_paneles, coleccion_servicios, coleccion_categorias
 
 async def importar_desde_api():
     paneles = list(coleccion_paneles.find({"activo": True}))
-    total_importados = 0
+    
+    if not paneles:
+        return "⚠️ <b>No hay paneles activos registrados para sincronizar.</b>"
+
     total_nuevos = 0
     total_actualizados = 0
-    errores = []
-    
-    for panel in paneles:
-        try:
-            url_base = panel["url"].rstrip("/")
-            async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=15)) as sesion:
-                async with sesion.get(f"{url_base}/?key={panel['api_key']}&action=services") as respuesta:
-                    if respuesta.status != 200:
-                        errores.append(f"{panel['nombre']}: Error {respuesta.status}")
-                        continue
-                    datos = await respuesta.json()
-                    
-                    lista_servicios = datos if isinstance(datos, list) else list(datos.values())
+    lista_errores = []
 
-                    for servicio in lista_servicios:
-                        if not isinstance(servicio, dict):
+    for panel in paneles:
+        nombre_panel = panel.get("nombre", "Panel sin nombre")
+        url_base = str(panel.get("url", "")).strip().rstrip("/")
+        api_key = str(panel.get("api_key", "")).strip()
+        porcentaje_extra = float(panel.get("porcentaje_ganancia", 0))
+
+        if not url_base or not api_key:
+            lista_errores.append(f"• {nombre_panel}: Falta URL o clave API")
+            continue
+
+        url_peticion = f"{url_base}/api.php?key={api_key}&action=services"
+
+        try:
+            # Máximo 15 segundos de espera por cada panel
+            tiempo_limite = aiohttp.ClientTimeout(total=15)
+            async with aiohttp.ClientSession(timeout=tiempo_limite) as sesion:
+                async with sesion.get(url_peticion, allow_redirects=True) as respuesta:
+                    if respuesta.status != 200:
+                        lista_errores.append(f"• {nombre_panel}: Error de conexión ({respuesta.status})")
+                        continue
+
+                    datos_recibidos = await respuesta.json()
+
+                    if not isinstance(datos_recibidos, list):
+                        lista_errores.append(f"• {nombre_panel}: La API no devolvió una lista válida")
+                        continue
+
+                    for servicio in datos_recibidos:
+                        id_api = str(servicio.get("service", "")).strip()
+                        nombre_servicio = str(servicio.get("name", "Sin nombre")).strip()
+                        nombre_categoria = str(servicio.get("category", "Sin categoría")).strip()
+                        precio_base = float(servicio.get("rate", 0))
+                        minimo = int(servicio.get("min", 1))
+                        maximo = int(servicio.get("max", 10000))
+                        descripcion = str(servicio.get("description", "")).strip()
+
+                        if not id_api or precio_base <= 0:
                             continue
-                            
-                        id_externo = str(servicio.get("service", servicio.get("id")))
-                        nombre = servicio.get("name", "Sin nombre")
-                        costo_bruto = float(servicio.get("rate", 0))
-                        costo_proveedor = costo_bruto / 1000 if costo_bruto > 100 else costo_bruto
-                        
-                        precios = calcular_precios(costo_proveedor, panel.get("porcentaje_ganancia"))
-                        categoria = clasificar_servicio(nombre)
-                        
-                        existe = coleccion_servicios.find_one({"id_externo": id_externo, "panel_id": panel["_id"]})
-                        
+
+                        # Buscar o crear categoría automáticamente
+                        cat_existe = coleccion_categorias.find_one({"nombre": nombre_categoria})
+                        if cat_existe:
+                            id_categoria = cat_existe["_id"]
+                        else:
+                            nueva_categoria = {
+                                "nombre": nombre_categoria,
+                                "descripcion": "",
+                                "activo": True,
+                                "creado_en": datetime.now()
+                            }
+                            resultado = coleccion_categorias.insert_one(nueva_categoria)
+                            id_categoria = resultado.inserted_id
+
+                        # Calcular precio final con tu ganancia
+                        precio_final = round(precio_base * (1 + (porcentaje_extra / 100)), 2)
+
                         datos_guardar = {
-                            "id_externo": id_externo,
-                            "nombre": nombre,
-                            "categoria": categoria,
-                            "costo_proveedor": precios["costo_proveedor"],
-                            "precio_venta": precios["precio_venta"],
-                            "minimo": int(servicio.get("min", 10)),
-                            "maximo": int(servicio.get("max", 5000)),
-                            "panel_id": panel["_id"],
+                            "id_api": id_api,
+                            "nombre": nombre_servicio,
+                            "categoria_id": id_categoria,
+                            "categoria_nombre": nombre_categoria,
+                            "descripcion": descripcion,
+                            "precio_original": precio_base,
+                            "precio_venta": precio_final,
+                            "cantidad_minima": minimo,
+                            "cantidad_maxima": maximo,
+                            "panel_origen": nombre_panel,
                             "activo": True,
                             "actualizado_en": datetime.now()
                         }
-                        
+
+                        # Actualizar o insertar
+                        existe = coleccion_servicios.find_one({"id_api": id_api, "panel_origen": nombre_panel})
                         if existe:
                             coleccion_servicios.update_one({"_id": existe["_id"]}, {"$set": datos_guardar})
-                            total_actualizados +=1
+                            total_actualizados += 1
                         else:
-                            datos_guardar["creado_en"] = datetime.now()
                             coleccion_servicios.insert_one(datos_guardar)
-                            total_nuevos +=1
-                        
-                        total_importados += 1
+                            total_nuevos += 1
 
+        except aiohttp.ClientConnectionError:
+            lista_errores.append(f"• {nombre_panel}: No se pudo conectar al servidor")
+        except aiohttp.ClientResponseError:
+            lista_errores.append(f"• {nombre_panel}: Respuesta inválida del panel")
+        except asyncio.TimeoutError:
+            lista_errores.append(f"• {nombre_panel}: Tardó demasiado en responder")
         except Exception as e:
-            errores.append(f"{panel['nombre']}: {str(e)}")
-            continue
-    
-    # Actualizar lista de categorías únicas
-    categorias_unicas = coleccion_servicios.distinct("categoria", {"activo": True})
-    coleccion_categorias.delete_many({})
-    for cat in categorias_unicas:
-        coleccion_categorias.insert_one({"nombre": cat, "activo": True, "creado_en": datetime.now()})
-    
-    texto = f"✅ Importación finalizada: {total_importados} servicios procesados\n🆕 Nuevos: {total_nuevos} | 🔄 Actualizados: {total_actualizados}"
-    if errores:
-        texto += f"\n⚠️ Errores:\n" + "\n".join(errores[:5])
-    return texto
+            lista_errores.append(f"• {nombre_panel}: {str(e)}")
+            print(f"Error detallado en {nombre_panel}: {str(e)}")
+        continue
 
+    # Mensaje final completo
+    mensaje = f"""✅ <b>SINCRONIZACIÓN FINALIZADA</b>
 
-async def importar_desde_texto(texto: str):
-    patron = r"(\d{1,5})\s*[-:]\s*(.+?)\s*[-:]\s*([0-9.]{1,10})"
-    coincidencias = re.findall(patron, texto, re.IGNORECASE)
-    total = 0
-    
-    for id_serv, nombre, precio in coincidencias:
-        categoria = clasificar_servicio(nombre.strip())
-        precios = calcular_precios(float(precio))
-        
-        coleccion_servicios.update_one(
-            {"id_externo": int(id_serv)},
-            {"$set": {
-                "id_externo": int(id_serv),
-                "nombre": nombre.strip(),
-                "categoria": categoria,
-                "costo_proveedor": precios["costo_proveedor"],
-                "precio_venta": precios["precio_venta"],
-                "minimo": 10,
-                "maximo": 3000,
-                "activo": True,
-                "actualizado_en": datetime.now()
-            }},
-            upsert=True
-        )
-        total += 1
-    
-    # Actualizar categorías
-    categorias_unicas = coleccion_servicios.distinct("categoria", {"activo": True})
-    coleccion_categorias.delete_many({})
-    for cat in categorias_unicas:
-        coleccion_categorias.insert_one({"nombre": cat, "activo": True})
-    
-    return f"✅ Se cargaron {total} servicios desde el archivo TXT"
+➕ Servicios nuevos agregados: <b>{total_nuevos}</b>
+🔄 Servicios actualizados: <b>{total_actualizados}</b>
+"""
 
+    if lista_errores:
+        mensaje += f"\n⚠️ <b>Hubo inconvenientes en:</b>\n"
+        # Mostrar máximo 5 errores para no alargar el mensaje
+        for error in lista_errores[:5]:
+            mensaje += f"{error}\n"
+        if len(lista_errores) > 5:
+            mensaje += f"... y {len(lista_errores)-5} más, revisa los registros"
 
-async def sincronizar_servicios():
-    return await importar_desde_api()
+    return mensaje
