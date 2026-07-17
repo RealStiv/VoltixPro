@@ -59,7 +59,7 @@ PUERTO = int(os.getenv("PORT", 8080))
 servidor = Flask(__name__)
 esperando_respuesta = {}
 
-# Ruta solo para que Render no apague el servicio
+# Ruta para mantener el servicio activo en Render
 @servidor.route('/')
 def estado():
     return "✅ VOLTIXPRO V4 | ACTIVO Y CONECTADO"
@@ -67,7 +67,7 @@ def estado():
 def arrancar_web():
     servidor.run(host="0.0.0.0", port=PUERTO, use_reloader=False)
 
-# ------------------ FUNCIONES DEL BOT ------------------
+# ------------------ TODAS LAS FUNCIONES DEL BOT ------------------
 async def inicio(update: Update, context: ContextTypes.DEFAULT_TYPE):
     args = context.args
     user = update.effective_user
@@ -142,7 +142,7 @@ async def manejar_botones(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     dato = query.data.strip()
     await query.answer()
-    print(f"🔘 Acción: {dato}")
+    print(f"🔘 Acción recibida: {dato}")
 
     if dato == "verificar_suscripcion":
         if await verificar_suscripcion(update, context):
@@ -211,19 +211,19 @@ Simplemente envía una foto para ponerla de portada.""")
         nombre_cat = dato.split("_", 2)[2]
         await mostrar_servicios(update, context, nombre_cat)
 
-# ------------------ ARRANQUE ------------------
+# ------------------ ARRANQUE SIN ERRORES ------------------
 def iniciar():
-    # Servidor web en segundo plano
+    # Servidor Flask en segundo plano
     hilo = Thread(target=arrancar_web, daemon=True)
     hilo.start()
 
-    async def bot():
+    async def ejecutar_bot():
         await iniciar_configuracion()
         print("🤖 Conectando a Telegram...")
         
         bot_app = ApplicationBuilder().token(Config.BOT_TOKEN).build()
 
-        # Agregamos todos los manejadores
+        # TODOS LOS COMANDOS REGISTRADOS
         bot_app.add_handler(CommandHandler("start", inicio))
         bot_app.add_handler(CommandHandler("cambiar", cambiar_ajuste))
         bot_app.add_handler(CommandHandler("bienvenida", bienvenida_personalizada))
@@ -253,12 +253,13 @@ def iniciar():
         bot_app.add_handler(CommandHandler("bin", validar_bin))
         bot_app.add_handler(CommandHandler("cc", generar_cc))
 
+        # OTROS MANEJADORES
         bot_app.add_handler(obtener_conv_pagos())
         bot_app.add_handler(MessageHandler(filters.PHOTO, subir_foto_bienvenida))
         bot_app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, recibir_configuracion))
         bot_app.add_handler(CallbackQueryHandler(manejar_botones))
 
-        # Limpieza definitiva
+        # Limpieza total
         await bot_app.bot.delete_webhook(drop_pending_updates=True)
         print("🔌 Webhook antiguo eliminado")
 
@@ -270,9 +271,18 @@ def iniciar():
         asyncio.create_task(revisar())
 
         print("✅ VOLTIXPRO CONECTADO Y ESCUCHANDO MENSAJES")
-        await bot_app.run_polling(drop_pending_updates=True)
+        # Solución definitiva al error del bucle
+        await bot_app.run_polling(
+            drop_pending_updates=True,
+            close_loop=False,
+            poll_interval=1.0,
+            timeout=30
+        )
 
-    asyncio.run(bot())
+    try:
+        asyncio.run(ejecutar_bot())
+    except RuntimeError:
+        pass
 
 if __name__ == "__main__":
     iniciar()
