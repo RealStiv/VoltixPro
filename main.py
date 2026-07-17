@@ -64,7 +64,7 @@ esperando_respuesta = {}
 def estado():
     return "✅ VOLTIXPRO V4 | ACTIVO Y ESCUCHANDO MENSAJES"
 
-def arrancar_web():
+def iniciar_servidor_web():
     servidor.run(host="0.0.0.0", port=PUERTO, use_reloader=False)
 
 # ------------------ TODAS LAS FUNCIONES DEL BOT ------------------
@@ -211,11 +211,12 @@ Simplemente envía una foto para ponerla de portada.""")
         nombre_cat = dato.split("_", 2)[2]
         await mostrar_servicios(update, context, nombre_cat)
 
-# ------------------ ARRANQUE SIN ERRORES ------------------
-def iniciar():
-    # Servidor Flask en segundo plano
-    hilo = Thread(target=arrancar_web, daemon=True)
-    hilo.start()
+# ------------------ ARRANQUE DEFINITIVO SIN ERRORES ------------------
+if __name__ == "__main__":
+    # Servidor web en segundo plano
+    hilo_web = Thread(target=iniciar_servidor_web, daemon=True)
+    hilo_web.start()
+    print("🌐 Servidor web listo")
 
     async def ejecutar_bot():
         await iniciar_configuracion()
@@ -259,9 +260,9 @@ def iniciar():
         bot_app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, recibir_configuracion))
         bot_app.add_handler(CallbackQueryHandler(manejar_botones))
 
-        # Limpieza total ya confirmada
+        # Limpieza total
         await bot_app.bot.delete_webhook(drop_pending_updates=True)
-        print("🔌 Webhook antiguo eliminado")
+        print("🔌 Restos eliminados")
 
         # Tarea automática
         async def revisar():
@@ -271,18 +272,7 @@ def iniciar():
         asyncio.create_task(revisar())
 
         print("✅ VOLTIXPRO CONECTADO Y ESCUCHANDO MENSAJES")
-        # Arranque definitivo sin errores
-        await bot_app.run_polling(
-            drop_pending_updates=True,
-            close_loop=False,
-            poll_interval=1.0,
-            timeout=30
-        )
+        # Arranque seguro sin conflictos
+        await bot_app.run_polling(drop_pending_updates=True)
 
-    try:
-        asyncio.run(ejecutar_bot())
-    except RuntimeError:
-        pass
-
-if __name__ == "__main__":
-    iniciar()
+    asyncio.run(ejecutar_bot())
