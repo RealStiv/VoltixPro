@@ -26,7 +26,7 @@ from mongodb import (
 from texto import t
 from interfaces.botones import (
     menu_principal, menu_suscripcion, menu_admin,
-    menu_usuarios, menu_categorias, menu_panel,
+    menu_usuarios, menu_categorias, menu_panel as menu_paneles,
     menu_config, menu_acciones, botones_factura, botones_lista_facturas
 )
 from modulos.acceso import verificar_suscripcion
@@ -91,10 +91,10 @@ async def inicio(update: Update, context: ContextTypes.DEFAULT_TYPE):
         })
     
     if not await verificar_suscripcion(update, context):
-        await update.message.reply_text(t("necesitas_suscribirte"), parse_mode="HTML", reply_markup=menu_suscripcion())
+        await update.message.reply_text(t("necesitas_suscribirte"), parse_mode="HTML", reply_markup=menu_suscripcion)
         return
     
-    await update.message.reply_text(t("bienvenida"), parse_mode="HTML", reply_markup=menu_principal())
+    await update.message.reply_text(t("bienvenida"), parse_mode="HTML", reply_markup=menu_principal)
 
 
 async def recibir_configuracion(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -108,7 +108,7 @@ async def recibir_configuracion(update: Update, context: ContextTypes.DEFAULT_TY
     del esperando_respuesta[user_id]
 
     resultado = await guardar_configuracion(accion, texto_recibido)
-    await update.message.reply_text(resultado, reply_markup=menu_config(), parse_mode="HTML")
+    await update.message.reply_text(resultado, reply_markup=menu_config, parse_mode="HTML")
 
 
 async def manejar_botones(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -117,102 +117,89 @@ async def manejar_botones(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.answer()
     print(f"🔘 BOTÓN PRESIONADO: '{dato}'")
     
+    # ✅ VERIFICAR SUSCRIPCIÓN
     if dato == "verificar_sus":
-        await query.answer()
         if await verificar_suscripcion(update, context):
             await query.edit_message_text(t("suscrito_correcto"), parse_mode="HTML")
             await inicio(update, context)
         else:
             await query.answer("❌ Aún no apareces como suscrito. Espera 1 minuto y vuelve a pulsar", show_alert=True)
     
-    elif dato.startswith("ver_cat_"):
-        categoria = dato.split("_", 2)[2]
-        await mostrar_servicios(update, context, categoria)
-    
-    elif dato.startswith("fac_ver_"):
-        numero = dato.split("_")[-1]
-        await procesar_factura(update, context, numero)
-    elif dato.startswith("fac_ok_"):
-        partes = dato.split("_")
-        numero = partes[2]
-        monto = float(partes[3])
-        await procesar_factura(update, context, numero, aprobar=True, monto=monto)
-    elif dato.startswith("fac_no_"):
-        numero = dato.split("_")[-1]
-        await procesar_factura(update, context, numero, aprobar=False)
+    # ✅ MENÚ PRINCIPAL
+    elif dato == "menu_tienda":
+        await mostrar_categorias(update, context)
+    elif dato == "menu_recarga":
+        await iniciar_recarga(update, context)
+    elif dato == "menu_perfil":
+        await mostrar_perfil(update, context)
+    elif dato == "menu_pedidos":
+        await ver_pedidos(update, context)
+    elif dato == "menu_herramientas":
+        await query.edit_message_text("""🔧 **HERRAMIENTAS DISPONIBLES**
+/dorks → Generar dorks
+/bin 123456 → Validar BIN
+/cc 5 → Generar tarjetas""", parse_mode="Markdown")
+    elif dato == "menu_admin":
+        await query.edit_message_text("⚙️ **PANEL DE ADMINISTRADOR**", reply_markup=menu_admin, parse_mode="HTML")
 
+    # ✅ VOLVER A INICIO / SALIR DE ADMIN
+    elif dato == "ad_salir":
+        await inicio(update, context)
+
+    # ✅ MENÚS ADMINISTRATIVOS
     elif dato == "ad_usuarios":
-        await query.edit_message_text("👥 **GESTIÓN DE USUARIOS**\nElige una acción:", reply_markup=menu_usuarios(), parse_mode="Markdown")
+        await query.edit_message_text("👥 **GESTIÓN DE USUARIOS**\nElige una acción:", reply_markup=menu_usuarios, parse_mode="Markdown")
     elif dato == "ad_categorias":
-        await query.edit_message_text("📂 **GESTIÓN DE CATEGORÍAS**\nElige lo que quieres hacer:", reply_markup=menu_categorias(), parse_mode="Markdown")
+        await query.edit_message_text("📂 **GESTIÓN DE CATEGORÍAS**\nElige lo que quieres hacer:", reply_markup=menu_categorias, parse_mode="Markdown")
     elif dato == "ad_panel":
-        await query.edit_message_text("➕ **GESTIÓN DE PANELES SMM**\nElige una opción:", reply_markup=menu_panel(), parse_mode="Markdown")
+        await query.edit_message_text("➕ **GESTIÓN DE PANELES SMM**\nElige una opción:", reply_markup=menu_paneles, parse_mode="Markdown")
+    elif dato == "menu_admin":
+        await query.edit_message_text("⚙️ **PANEL DE ADMINISTRADOR**", reply_markup=menu_admin, parse_mode="Markdown")
     elif dato == "ad_actualizar":
-        await query.edit_message_text("🔄 Sincronizando servicios desde paneles... ⏳", reply_markup=menu_admin())
+        await query.edit_message_text("🔄 Sincronizando servicios desde paneles... ⏳", reply_markup=menu_admin)
         resultado = await importar_desde_api()
-        await query.edit_message_text(resultado, reply_markup=menu_admin(), parse_mode="HTML")
+        await query.edit_message_text(resultado, reply_markup=menu_admin, parse_mode="HTML")
     elif dato == "ad_facturas":
         lista = list(coleccion_facturas.find({"estado": "PENDIENTE"}))
         if not lista:
-            await query.edit_message_text("✅ No hay facturas pendientes", reply_markup=menu_admin())
+            await query.edit_message_text("✅ No hay facturas pendientes", reply_markup=menu_admin)
         else:
             await query.edit_message_text("🧾 **FACTURAS PENDIENTES**", reply_markup=botones_lista_facturas(lista))
     elif dato == "ad_config":
-        await query.edit_message_text("⚙️ **CONFIGURACIÓN GENERAL DEL BOT**\nElige lo que quieres modificar:", reply_markup=menu_config(), parse_mode="Markdown")
+        await query.edit_message_text("⚙️ **CONFIGURACIÓN GENERAL DEL BOT**\nElige lo que quieres modificar:", reply_markup=menu_config, parse_mode="Markdown")
     elif dato == "acc_menu":
-        await query.edit_message_text("📊 **ACCIONES RÁPIDAS**\nElige la acción:", reply_markup=menu_acciones(), parse_mode="Markdown")
-    elif dato == "ad_salir":
-        await inicio(update, context)
-    elif dato == "us_lista":
-        lista = list(coleccion_usuarios.find().sort("_id",-1).limit(15))
-        texto = "📋 **LISTA DE USUARIOS**\n"
-        for u in lista:
-            texto += f"• {u.get('nombre','Sin nombre')} | ID: `{u['user_id']}` | Saldo: {Config.SIMBOLO}{u.get('saldo',0)}\n"
-        await query.edit_message_text(texto, reply_markup=menu_usuarios(), parse_mode="Markdown")
-    elif dato == "us_recargar":
-        await query.edit_message_text("💸 **RECARGAR SALDO**\nEscribe: `/addsaldo ID_USUARIO MONTO`", reply_markup=menu_usuarios())
-    elif dato == "us_bloquear":
-        await query.edit_message_text("🔒 **BLOQUEAR USUARIO**\nEscribe: `/ban ID_USUARIO`", reply_markup=menu_usuarios())
-    elif dato == "us_desbloquear":
-        await query.edit_message_text("🔓 **DESBLOQUEAR USUARIO**\nEscribe: `/unban ID_USUARIO`", reply_markup=menu_usuarios())
-    elif dato == "cat_crear":
-        await query.edit_message_text("➕ **CREAR CATEGORÍA**\nEscribe: `/crearcategoria NOMBRE`", reply_markup=menu_categorias())
-    elif dato == "cat_editar":
-        await query.edit_message_text("✏️ **EDITAR CATEGORÍA**\nEscribe: `/editarcat NOMBRE NOMBRE_NUEVO`", reply_markup=menu_categorias())
-    elif dato == "cat_eliminar":
-        await query.edit_message_text("❌ **ELIMINAR CATEGORÍA**\nEscribe: `/borrarcat NOMBRE`", reply_markup=menu_categorias())
+        await query.edit_message_text("📊 **ACCIONES RÁPIDAS**\nElige la acción:", reply_markup=menu_acciones, parse_mode="Markdown")
+
+    # ✅ ACCIONES DE PANELES
     elif dato == "pan_agregar":
-        await query.edit_message_text("📝 **AGREGAR NUEVO PANEL**\nEscribe: `/agregarpanel NOMBRE | URL | API_KEY | PORCENTAJE`", reply_markup=menu_panel())
+        await query.edit_message_text("📝 **AGREGAR NUEVO PANEL**\nEscribe: `/agregarpanel NOMBRE | URL | API_KEY | PORCENTAJE`", reply_markup=menu_paneles)
     elif dato == "pan_lista":
-        lista = await listar_paneles()
-        texto = "📋 **PANELES ACTIVOS**\n\n"
-        if not lista:
-            texto += "No hay paneles agregados aún."
-        else:
-            for p in lista:
-                texto += f"• {p.get('nombre', 'Sin nombre')} → {p.get('url', '')}\n"
-        await query.edit_message_text(texto, reply_markup=menu_panel(), parse_mode="Markdown")
+        await listar_paneles(update, context)
     elif dato == "pan_editar":
-        await query.edit_message_text("✏️ **EDITAR PANEL**\nEscribe: `/editarpanel ID CAMPO VALOR`", reply_markup=menu_panel())
+        await query.edit_message_text("✏️ **EDITAR PANEL**\nEscribe: `/editarpanel ID CAMPO VALOR`", reply_markup=menu_paneles)
     elif dato == "pan_eliminar":
-        await query.edit_message_text("❌ **ELIMINAR PANEL**\nEscribe: `/borrarpanel ID`", reply_markup=menu_panel())
+        await query.edit_message_text("❌ **ELIMINAR PANEL**\nEscribe: `/borrarpanel ID`", reply_markup=menu_paneles)
+
+    # ✅ ACCIONES DE CONFIGURACIÓN
     elif dato == "conf_minimo":
         esperando_respuesta[update.effective_user.id] = "monto_minimo_recarga"
-        await query.edit_message_text("💵 **MONTO MÍNIMO DE RECARGA**\nEscribe el nuevo monto:", reply_markup=menu_config())
+        await query.edit_message_text("💵 **MONTO MÍNIMO DE RECARGA**\nEscribe el nuevo monto:", reply_markup=menu_config)
     elif dato == "conf_canal":
         esperando_respuesta[update.effective_user.id] = "canal_obligatorio"
-        await query.edit_message_text("📢 **CANAL OBLIGATORIO**\nEscribe: @nombre_canal", reply_markup=menu_config())
+        await query.edit_message_text("📢 **CANAL OBLIGATORIO**\nEscribe: @nombre_canal o ID:", reply_markup=menu_config)
     elif dato == "conf_pago":
         esperando_respuesta[update.effective_user.id] = "datos_pago"
-        await query.edit_message_text("🔑 **DATOS DE PAGO**\nEscribe: Banco | Número | Titular", reply_markup=menu_config())
+        await query.edit_message_text("🔑 **DATOS DE PAGO**\nEscribe: Banco | Número | Titular", reply_markup=menu_config)
     elif dato == "conf_margen":
         esperando_respuesta[update.effective_user.id] = "porcentaje_ganancia"
-        await query.edit_message_text("📊 **PORCENTAJE DE GANANCIA**\nEscribe solo el número, ejemplo: 20 = 20%", reply_markup=menu_config())
+        await query.edit_message_text("📊 **PORCENTAJE DE GANANCIA**\nEscribe solo el número, ejemplo: 20 = 20%", reply_markup=menu_config)
     elif dato == "conf_mensajes":
         esperando_respuesta[update.effective_user.id] = "mensajes_aviso"
-        await query.edit_message_text("🔔 **MENSAJES DEL BOT**\nEscribe el mensaje personalizado:", reply_markup=menu_config())
+        await query.edit_message_text("🔔 **MENSAJES DEL BOT**\nEscribe el mensaje personalizado:", reply_markup=menu_config)
+
+    # ✅ ACCIONES RÁPIDAS
     elif dato == "acc_aviso":
-        await query.edit_message_text("📢 **ENVIAR AVISO GENERAL**\nEscribe el mensaje que recibirán todos los usuarios:", reply_markup=menu_acciones())
+        await query.edit_message_text("📢 **ENVIAR AVISO GENERAL**\nEscribe el mensaje que recibirán todos los usuarios:", reply_markup=menu_acciones)
     elif dato == "acc_stats":
         stats = {
             "usuarios": coleccion_usuarios.count_documents({}),
@@ -229,11 +216,28 @@ async def manejar_botones(update: Update, context: ContextTypes.DEFAULT_TYPE):
 🧾 Facturas pendientes: {stats['facturas_pen']}
 🔌 Paneles conectados: {stats['paneles']}
 """
-        await query.edit_message_text(texto, reply_markup=menu_acciones(), parse_mode="Markdown")
+        await query.edit_message_text(texto, reply_markup=menu_acciones, parse_mode="Markdown")
     elif dato == "acc_reiniciar":
-        await query.edit_message_text("🔄 Sincronizando todo nuevamente... ⏳", reply_markup=menu_acciones())
+        await query.edit_message_text("🔄 Sincronizando todo nuevamente... ⏳", reply_markup=menu_acciones)
         resultado = await importar_desde_api()
-        await query.edit_message_text(resultado, reply_markup=menu_acciones(), parse_mode="HTML")
+        await query.edit_message_text(resultado, reply_markup=menu_acciones, parse_mode="HTML")
+
+    # ✅ TIENDA Y OTROS
+    elif dato.startswith("ver_cat_"):
+        categoria = dato.split("_", 2)[2]
+        await mostrar_servicios(update, context, categoria)
+    elif dato.startswith("fac_ver_"):
+        numero = dato.split("_")[-1]
+        await procesar_factura(update, context, numero)
+    elif dato.startswith("fac_ok_"):
+        partes = dato.split("_")
+        numero = partes[2]
+        monto = float(partes[3])
+        await procesar_factura(update, context, numero, aprobar=True, monto=monto)
+    elif dato.startswith("fac_no_"):
+        numero = dato.split("_")[-1]
+        await procesar_factura(update, context, numero, aprobar=False)
+
     else:
         await query.answer("❌ Opción no disponible", show_alert=True)
         print(f"⚠️ Acción desconocida: '{dato}'")
@@ -275,7 +279,7 @@ async def manejar_mensajes(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(
             t("admin_panel",** stats),
             parse_mode="HTML",
-            reply_markup=menu_admin()
+            reply_markup=menu_admin
         )
 
 
@@ -290,6 +294,7 @@ async def iniciar_todo():
     bot_app = ApplicationBuilder().token(Config.BOT_TOKEN).build()
     await bot_app.initialize()
     
+    # 📌 TODOS LOS COMANDOS REGISTRADOS
     bot_app.add_handler(CommandHandler("start", inicio))
     bot_app.add_handler(CommandHandler("permisos", dar_permisos))
     bot_app.add_handler(CommandHandler("rol", cambiar_rol))
