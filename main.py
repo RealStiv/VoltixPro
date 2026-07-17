@@ -360,7 +360,7 @@ Simplemente envía una foto para ponerla de portada.""")
 
 
 # ==================================================
-# 🚀 ARRANQUE FINAL Y CONEXIÓN
+# 🚀 ARRANQUE FINAL Y CONEXIÓN CORREGIDO
 # ==================================================
 async def ejecutar_bot():
     log("🔗 Conectando y preparando base de datos...", "PASO")
@@ -427,22 +427,16 @@ async def ejecutar_bot():
 
     await bot_app.run_polling(drop_pending_updates=True, close_loop=False)
 
-def arrancar_bot():
-    try:
-        asyncio.run(ejecutar_bot())
-    except Exception as e:
-        log(f"❌ ERROR GENERAL DEL BOT: {str(e)}", "ERROR")
-        log(f"🔍 Traza completa:\n{traceback.format_exc()}", "ERROR")
-
 if __name__ == "__main__":
     try:
-        # Servidor en su propio hilo
+        # ✅ Flask va en su propio hilo secundario
         Thread(target=iniciar_servidor_web, daemon=True).start()
-        # Bot en su propio hilo sin conflictos
-        Thread(target=arrancar_bot, daemon=True).start()
-        # Mantener el programa activo indefinidamente
-        while True:
-            time.sleep(3600)
+        log("🌐 Servidor web iniciado correctamente", "EXITO")
+
+        # ✅ EL BOT VA DIRECTAMENTE EN EL HILO PRINCIPAL
+        log("🤖 Iniciando conexión con Telegram...", "PASO")
+        asyncio.run(ejecutar_bot())
+
     except Exception as e:
         log(f"❌ ERROR EN EL ARRANQUE GENERAL: {str(e)}", "ERROR")
         log(f"🔍 Traza completa:\n{traceback.format_exc()}", "ERROR")
