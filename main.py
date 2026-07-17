@@ -1,7 +1,9 @@
 import sys
 import warnings
 import os
-import certifi
+import asyncio
+from threading import Thread
+
 warnings.filterwarnings("ignore")
 
 from dotenv import load_dotenv
@@ -12,9 +14,7 @@ from telegram.ext import (
     ApplicationBuilder, CommandHandler, ContextTypes,
     CallbackQueryHandler, MessageHandler, filters
 )
-from flask import Flask, request
-import asyncio
-from threading import Thread
+from flask import Flask
 
 print("⚡ INICIANDO VOLTIXPRO V4...")
 
@@ -53,39 +53,31 @@ from modulos.estadisticas_avanzadas import obtener_estadisticas
 from modulos.personalizacion import cambiar_ajuste, bienvenida_personalizada, subir_foto_bienvenida, obtener_ajuste
 from datetime import datetime
 
+# ── CONFIGURACIONES ──
 PUERTO = int(os.getenv("PORT", 8080))
-DOMINIO = "https://voltixpro.onrender.com"
 servidor = Flask(__name__)
 bot_app = None
-loop_principal = None
 listo = False
 esperando_respuesta = {}
 
-
+# ── RUTAS WEB SOLO PARA QUE RENDER NO SE DETENGA ──
 @servidor.route('/')
 def estado():
-    return "✅ VOLTIXPRO V4 EN LÍNEA Y FUNCIONANDO"
+    return "✅ VOLTIXPRO V4 EN LÍNEA"
 
-@servidor.route('/webhook', methods=['GET','POST'])
-def recibir_webhook():
-    return "🔌 El sistema usa conexión directa, esta ruta es solo informativa"
-
-def iniciar_servidor():
+def arrancar_servidor_web():
     servidor.run(host="0.0.0.0", port=PUERTO)
 
-
+# ── FUNCIONES DEL BOT ──
 async def inicio(update: Update, context: ContextTypes.DEFAULT_TYPE):
     args = context.args
     user = update.effective_user
 
-    # Procesar referido al ingresar
     if args:
         codigo = args[0].upper()
         await verificar_referido(user.id, codigo)
 
     usuario = coleccion_usuarios.find_one({"user_id": user.id})
-    
-    # Crear usuario nuevo si no existe
     if not usuario:
         codigo_ref = await asignar_codigo_referido(user.id)
         coleccion_usuarios.insert_one({
@@ -109,7 +101,6 @@ async def inicio(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "creado_en": datetime.now()
         })
     
-    # Verificar suscripción
     if not await verificar_suscripcion(update, context):
         canal = await obtener_ajuste("canal_obligatorio", "@Voltix_Pro")
         await update.message.reply_text(
@@ -118,17 +109,14 @@ async def inicio(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return
     
-    # Mostrar bienvenida personalizada
     await bienvenida_personalizada(update, context)
 
 
 async def recibir_configuracion(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     texto = update.message.text.strip()
-
     if user_id not in esperando_respuesta:
         return
-
     accion = esperando_respuesta.pop(user_id)
     resultado = await guardar_configuracion(accion, texto)
     await update.message.reply_text(resultado)
@@ -137,7 +125,6 @@ async def recibir_configuracion(update: Update, context: ContextTypes.DEFAULT_TY
 async def ver_estadisticas_generales(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != Config.ADMIN_ID:
         return await update.callback_query.answer("❌ Sin permiso", show_alert=True)
-    
     est = await obtener_estadisticas()
     texto = f"""📊 **ESTADÍSTICAS GENERALES**
 
@@ -149,7 +136,6 @@ async def ver_estadisticas_generales(update: Update, context: ContextTypes.DEFAU
 """
     for item in est['mas_vendidos']:
         texto += f"• {item['_id']}: {item['cantidad']} ventas\n"
-
     await update.callback_query.edit_message_text(texto, parse_mode="Markdown", reply_markup=menu_acciones)
 
 
@@ -159,81 +145,46 @@ async def manejar_botones(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.answer()
     print(f"🔘 Botón presionado: {dato}")
 
-    # Suscripción
     if dato == "verificar_suscripcion":
         if await verificar_suscripcion(update, context):
             await bienvenida_personalizada(update, context)
         else:
             await query.answer("❌ Aún no te unes al canal", show_alert=True)
 
-    # Menú principal
-    elif dato == "menu_tienda":
-        await mostrar_categorias(update, context)
-    elif dato == "menu_buscar":
-        await query.edit_message_text("🔎 Escribe: /buscar seguidores instagram")
-    elif dato == "menu_favoritos":
-        await ver_favoritos(update, context)
-    elif dato == "menu_carrito":
-        await ver_carrito(update, context)
-    elif dato == "menu_recarga":
-        await iniciar_recarga(update, context)
+    elif dato == "menu_tienda": await mostrar_categorias(update, context)
+    elif dato == "menu_buscar": await query.edit_message_text("🔎 Escribe: /buscar seguidores instagram")
+    elif dato == "menu_favoritos": await ver_favoritos(update, context)
+    elif dato == "menu_carrito": await ver_carrito(update, context)
+    elif dato == "menu_recarga": await iniciar_recarga(update, context)
     elif dato == "menu_perfil":
         from modulos.soporte_faq import perfil_completo
         await perfil_completo(update, context)
-    elif dato == "menu_pedidos":
-        await ver_pedidos(update, context)
+    elif dato == "menu_pedidos": await ver_pedidos(update, context)
     elif dato == "menu_admin":
         if update.effective_user.id == Config.ADMIN_ID:
             await query.edit_message_text("⚙️ PANEL DE ADMINISTRACIÓN", reply_markup=menu_admin)
         else:
             await query.answer("❌ Solo el administrador puede entrar", show_alert=True)
-
-    # Navegación
-    elif dato == "ad_salir":
-        await bienvenida_personalizada(update, context)
-    elif dato == "menu_admin":
-        await query.edit_message_text("⚙️ PANEL DE ADMINISTRADOR", reply_markup=menu_admin)
-    elif dato == "ad_usuarios":
-        await query.edit_message_text("👥 GESTIÓN DE USUARIOS", reply_markup=menu_usuarios)
-    elif dato == "ad_categorias":
-        await query.edit_message_text("📂 GESTIÓN DE CATEGORÍAS", reply_markup=menu_categorias)
-    elif dato == "ad_paneles":
-        await query.edit_message_text("🔌 GESTIÓN DE PANELES", reply_markup=menu_panel)
-    elif dato == "ad_config":
-        await query.edit_message_text("⚙️ CONFIGURACIÓN GENERAL", reply_markup=menu_config)
-    elif dato == "ad_acciones":
-        await query.edit_message_text("📋 ACCIONES RÁPIDAS", reply_markup=menu_acciones)
-
-    # Acciones paneles
-    elif dato == "pan_agregar":
-        await query.edit_message_text("📝 Escribe: /agregarpanel NOMBRE | URL | CLAVE | PORCENTAJE")
-    elif dato == "pan_ver_ids":
-        await ver_ids_paneles(update, context)
-    elif dato == "pan_copiar":
-        await query.edit_message_text("📋 Escribe: /copiarpanel ID_ORIGEN ID_DESTINO")
-    elif dato == "pan_editar":
-        await query.edit_message_text("✏️ Escribe: /editarpanel ID CAMPO NUEVO_VALOR")
-    elif dato == "pan_eliminar":
-        await query.edit_message_text("🗑️ Escribe: /eliminarpanel ID_DEL_PANEL")
-
-    # Acciones rápidas
+    elif dato == "ad_salir": await bienvenida_personalizada(update, context)
+    elif dato == "ad_usuarios": await query.edit_message_text("👥 GESTIÓN DE USUARIOS", reply_markup=menu_usuarios)
+    elif dato == "ad_categorias": await query.edit_message_text("📂 GESTIÓN DE CATEGORÍAS", reply_markup=menu_categorias)
+    elif dato == "ad_paneles": await query.edit_message_text("🔌 GESTIÓN DE PANELES", reply_markup=menu_panel)
+    elif dato == "ad_config": await query.edit_message_text("⚙️ CONFIGURACIÓN GENERAL", reply_markup=menu_config)
+    elif dato == "ad_acciones": await query.edit_message_text("📋 ACCIONES RÁPIDAS", reply_markup=menu_acciones)
+    elif dato == "pan_agregar": await query.edit_message_text("📝 Escribe: /agregarpanel NOMBRE | URL | CLAVE | PORCENTAJE")
+    elif dato == "pan_ver_ids": await ver_ids_paneles(update, context)
+    elif dato == "pan_copiar": await query.edit_message_text("📋 Escribe: /copiarpanel ID_ORIGEN ID_DESTINO")
+    elif dato == "pan_editar": await query.edit_message_text("✏️ Escribe: /editarpanel ID CAMPO NUEVO_VALOR")
+    elif dato == "pan_eliminar": await query.edit_message_text("🗑️ Escribe: /eliminarpanel ID_DEL_PANEL")
     elif dato == "acc_aviso":
         esperando_respuesta[update.effective_user.id] = "mensaje_aviso"
         await query.edit_message_text("📢 Escribe el mensaje que recibirán todos:")
-    elif dato == "acc_historial":
-        await ver_historial(update, context)
-    elif dato == "acc_respaldo":
-        await crear_respaldo(update, context)
-    elif dato == "acc_mantenimiento":
-        await alternar_mantenimiento(update, context)
-    elif dato == "acc_stats":
-        await ver_estadisticas_generales(update, context)
-    elif dato == "acc_reiniciar":
-        await sincronizar_servicios(update, context)
-
-    # Configuración
-    elif dato == "conf_niveles":
-        await ver_niveles(update, context)
+    elif dato == "acc_historial": await ver_historial(update, context)
+    elif dato == "acc_respaldo": await crear_respaldo(update, context)
+    elif dato == "acc_mantenimiento": await alternar_mantenimiento(update, context)
+    elif dato == "acc_stats": await ver_estadisticas_generales(update, context)
+    elif dato == "acc_reiniciar": await sincronizar_servicios(update, context)
+    elif dato == "conf_niveles": await ver_niveles(update, context)
     elif dato == "conf_limite":
         esperando_respuesta[update.effective_user.id] = "limite_diario"
         await query.edit_message_text("🚧 Escribe el monto límite por día:")
@@ -254,31 +205,25 @@ Comandos disponibles:
 /cambiar reglas 1. Regla uno...
 
 Simplemente envía una foto para ponerla de portada.""")
-
-    # Carrito
     elif dato == "carrito_vaciar":
         coleccion_usuarios.update_one({"user_id": update.effective_user.id}, {"$set": {"carrito": []}})
         await query.answer("✅ Carrito vaciado", show_alert=True)
         await ver_carrito(update, context)
-
-    # Categorías
     elif dato.startswith("ver_cat_"):
         nombre_cat = dato.split("_", 2)[2]
         await mostrar_servicios(update, context, nombre_cat)
 
 
-async def iniciar_todo():
-    global bot_app, loop_principal, listo
-    loop_principal = asyncio.get_running_loop()
-
-    print("⚙️ Cargando configuración base...")
+async def arrancar_bot():
+    global bot_app, listo
+    print("⚙️ Preparando base de datos...")
     await iniciar_configuracion()
 
     print("🤖 Conectando al bot...")
     bot_app = ApplicationBuilder().token(Config.BOT_TOKEN).build()
     await bot_app.initialize()
 
-    # 📋 TODOS LOS COMANDOS
+    # REGISTRAR TODOS LOS COMANDOS
     bot_app.add_handler(CommandHandler("start", inicio))
     bot_app.add_handler(CommandHandler("cambiar", cambiar_ajuste))
     bot_app.add_handler(CommandHandler("bienvenida", bienvenida_personalizada))
@@ -308,32 +253,38 @@ async def iniciar_todo():
     bot_app.add_handler(CommandHandler("bin", validar_bin))
     bot_app.add_handler(CommandHandler("cc", generar_cc))
 
-    # 📨 MENSAJES Y BOTONES
+    # MENSAJES Y BOTONES
     bot_app.add_handler(obtener_conv_pagos())
     bot_app.add_handler(MessageHandler(filters.PHOTO, subir_foto_bienvenida))
     bot_app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, recibir_configuracion))
     bot_app.add_handler(CallbackQueryHandler(manejar_botones))
 
-    # 🚀 ELIMINAMOS WEBHOOK Y USAMOS SOLO CONEXIÓN DIRECTA
+    # ELIMINAMOS CUALQUIER WEBHOOK QUE ESTORBE
     await bot_app.bot.delete_webhook(drop_pending_updates=True)
-    print("🔌 Modo de conexión: Polling directo activado")
-    listo = True
+    print("🔌 Webhook eliminado → Modo Polling activo")
 
-    print("⚡ VOLTIXPRO V4 ARRANCADO Y ESCUCHANDO MENSAJES")
-
-    # Revisión automática de paneles cada 30 minutos
+    # TAREAS AUTOMÁTICAS
     async def revisar_periodico():
         while True:
             await asyncio.sleep(1800)
             await revisar_estado_paneles(bot_app)
     asyncio.create_task(revisar_periodico())
 
-    # Arrancamos todo correctamente
+    listo = True
+    print("✅ VOLTIXPRO V4 ARRANCADO Y ESCUCHANDO")
+
+    # MANTENEMOSLO VIVO
     await bot_app.start()
-    await bot_app.updater.start_polling(drop_pending_updates=True)
+    await bot_app.updater.start_polling(
+        drop_pending_updates=True,
+        poll_interval=1.0,
+        timeout=30
+    )
 
 
 if __name__ == "__main__":
-    hilo = Thread(target=iniciar_servidor, daemon=True)
-    hilo.start()
-    asyncio.run(iniciar_todo())
+    # 1. Arrancamos servidor web en segundo plano
+    hilo_web = Thread(target=arrancar_servidor_web, daemon=True)
+    hilo_web.start()
+    # 2. Arrancamos el bot en el hilo principal
+    asyncio.run(arrancar_bot())
