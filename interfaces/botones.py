@@ -56,6 +56,7 @@ menu_config = InlineKeyboardMarkup([
      InlineKeyboardButton("🎁 Recompensa referidos", callback_data="conf_referido")],
     [InlineKeyboardButton("🔔 Aviso saldo bajo", callback_data="conf_saldobajo"),
      InlineKeyboardButton("🔒 Seguridad", callback_data="conf_seguridad")],
+    [InlineKeyboardButton("🎨 Personalizar marca", callback_data="conf_marca")],
     [InlineKeyboardButton("🔙 Volver", callback_data="menu_admin")]
 ])
 
@@ -76,6 +77,14 @@ menu_categorias = InlineKeyboardMarkup([
     [InlineKeyboardButton("🔙 Volver", callback_data="menu_admin")]
 ])
 
+# 📌 Perfil de usuario
+menu_perfil = InlineKeyboardMarkup([
+    [InlineKeyboardButton("🎁 Mis referidos", callback_data="ref_menu"),
+     InlineKeyboardButton("💱 Cambiar moneda", callback_data="conf_moneda")],
+    [InlineKeyboardButton("❓ Ayuda y FAQ", callback_data="faq_menu")],
+    [InlineKeyboardButton("🔙 Menú principal", callback_data="ad_salir")]
+])
+
 # 📌 Acciones Carrito
 botones_carrito = InlineKeyboardMarkup([
     [InlineKeyboardButton("✅ Pagar todo", callback_data="carrito_pagar")],
@@ -87,12 +96,4 @@ botones_carrito = InlineKeyboardMarkup([
 botones_factura = InlineKeyboardMarkup([
     [InlineKeyboardButton("✅ Ya realicé el pago", callback_data="pagado_confirmar")],
     [InlineKeyboardButton("❌ Cancelar", callback_data="pagado_cancelar")]
-])
-
-# 📌 Perfil de usuario
-menu_perfil = InlineKeyboardMarkup([
-    [InlineKeyboardButton("🎁 Mis referidos", callback_data="ref_menu"),
-     InlineKeyboardButton("💱 Cambiar moneda", callback_data="conf_moneda")],
-    [InlineKeyboardButton("❓ Ayuda y FAQ", callback_data="faq_menu")],
-    [InlineKeyboardButton("🔙 Menú principal", callback_data="ad_salir")]
 ])
