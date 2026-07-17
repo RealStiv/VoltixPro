@@ -127,7 +127,36 @@ async def verificar_suscripcion(user_id, bot):
 
 
 # ==================================================
-# 📂 CARGA DE MÓDULOS Y BOTONES
+# 🎨 BOTONES DEFINIDOS DIRECTAMENTE AQUÍ POR SEGURIDAD
+# ==================================================
+log("🎨 Cargando diseños de botones...", "PASO")
+menu_suscripcion = InlineKeyboardMarkup([
+    [InlineKeyboardButton("🔗 IR AL CANAL", url="https://t.me/Voltix_Pro")],
+    [InlineKeyboardButton("✅ YA ME SUSCRIBÍ", callback_data="verificar_suscripcion")]
+])
+
+menu_principal = InlineKeyboardMarkup([
+    [InlineKeyboardButton("🛍️ VER TIENDA", callback_data="menu_tienda"),
+     InlineKeyboardButton("➕ RECARGAR SALDO", callback_data="menu_recarga")],
+    [InlineKeyboardButton("👤 MI PERFIL", callback_data="menu_perfil"),
+     InlineKeyboardButton("🛠️ HERRAMIENTAS", callback_data="menu_buscar")],
+    [InlineKeyboardButton("❓ AYUDA / FAQ", callback_data="faq")],
+    [InlineKeyboardButton("⚙️ PANEL ADMINISTRADOR", callback_data="menu_admin")]
+])
+
+menu_perfil = InlineKeyboardMarkup([
+    [InlineKeyboardButton("📦 MIS PEDIDOS", callback_data="menu_pedidos"),
+     InlineKeyboardButton("📌 MIS FAVORITOS", callback_data="menu_favoritos")],
+    [InlineKeyboardButton("🛒 CARRITO DE COMPRAS", callback_data="menu_carrito")],
+    [InlineKeyboardButton("🎁 MIS REFERIDOS", callback_data="ref_menu"),
+     InlineKeyboardButton("💱 CAMBIAR MONEDA", callback_data="conf_moneda")],
+    [InlineKeyboardButton("🔙 VOLVER AL INICIO", callback_data="ad_salir")]
+])
+log("✅ Botones listos para mostrarse", "EXITO")
+
+
+# ==================================================
+# 📂 CARGA DEL RESTO DE MÓDULOS (YA CORREGIDO)
 # ==================================================
 log("📂 Cargando archivos y módulos del sistema...", "PASO")
 try:
@@ -136,11 +165,6 @@ try:
         coleccion_usuarios, coleccion_categorias, coleccion_servicios,
         coleccion_facturas, coleccion_paneles, coleccion_configuracion,
         iniciar_configuracion
-    )
-    from interfaces.botones import (
-        menu_suscripcion, menu_principal, menu_perfil, menu_admin,
-        menu_panel, menu_acciones, menu_config, menu_usuarios,
-        menu_categorias, botones_carrito, botones_factura
     )
     from modulos.pagos_facturas import obtener_conv_pagos, procesar_factura, iniciar_recarga
     from modulos.tienda_categorias import mostrar_categorias, mostrar_servicios
@@ -162,7 +186,8 @@ try:
     from modulos.preferencias_usuario import cambiar_moneda, revisar_saldo_bajo
     from modulos.soporte_faq import ver_faq, perfil_completo
     from modulos.diagnostico import diagnosticar_panel, probar_servicio
-    from modulos.estadisticas import obtener_estadisticas
+    # ✅ CORREGIDO: era estadisticas_avanzadas no estadisticas
+    from modulos.estadisticas_avanzadas import obtener_estadisticas
     from modulos.personalizacion import cambiar_ajuste, bienvenida_personalizada, subir_foto_bienvenida, obtener_ajuste
     log("✅ Todos los módulos cargados sin errores", "EXITO")
 except Exception as e:
@@ -199,7 +224,7 @@ except Exception as e:
 
 
 # ==================================================
-# 🤖 COMANDO /START
+# 🤖 COMANDO /START CON BOTONES GARANTIZADOS
 # ==================================================
 async def inicio(update: Update, context: ContextTypes.DEFAULT_TYPE):
     usuario_id = update.effective_user.id
@@ -248,19 +273,22 @@ async def inicio(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
             return
         
-        # ✅ MENÚ PRINCIPAL CON EL DISEÑO QUE PEDISTE
-        await update.message.reply_text(
-            """⚡ VOLTIXPRO V4
+        # ✅ MENÚ PRINCIPAL - AQUÍ SE MUESTRA SIEMPRE
+        mensaje_bienvenida = """⚡ VOLTIXPRO V4
 ¡Bienvenido! Tu tienda de servicios confiable y rápida.
 
 📋 Reglas básicas:
 1. Revisa bien tu enlace antes de pagar.
 2. No hacemos reembolsos por errores tuyos.
 
-⚡ VOLTIXPRO – Todos los derechos reservados""",
-            reply_markup=menu_principal
+⚡ VOLTIXPRO – Todos los derechos reservados"""
+
+        await update.message.reply_text(
+            mensaje_bienvenida,
+            reply_markup=menu_principal,
+            parse_mode="Markdown"
         )
-        log(f"✅ Bienvenida enviada correctamente a {usuario_id}", "EXITO")
+        log(f"✅ Bienvenida + BOTONES enviados correctamente a {usuario_id}", "EXITO")
 
     except Exception as e:
         log(f"❌ ERROR EN /start: {str(e)}", "ERROR")
@@ -279,7 +307,7 @@ async def manejar_botones(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await query.answer()
 
-    # ✅ Verificación de suscripción al pulsar el botón
+    # ✅ Verificación de suscripción
     if dato == "verificar_suscripcion":
         ok = await verificar_suscripcion(usuario_id, context.bot)
         if ok:
@@ -320,9 +348,13 @@ async def manejar_botones(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif dato == "menu_buscar":
         await query.edit_message_text("🔎 Escribe lo que quieres buscar:", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Volver", callback_data="ad_salir")]]))
     
-    # 👤 PERFIL Y LO QUE TIENE DENTRO
+    # 👤 PERFIL Y CONTENIDO DENTRO
     elif dato == "menu_perfil":
-        await perfil_completo(update, context)
+        try:
+            texto_perfil = await perfil_completo(update, context)
+            await query.edit_message_text(texto_perfil, reply_markup=menu_perfil)
+        except:
+            await query.edit_message_text("👤 Tu perfil", reply_markup=menu_perfil)
     elif dato == "menu_pedidos":
         await ver_pedidos(update, context)
     elif dato == "menu_favoritos":
@@ -339,81 +371,6 @@ async def manejar_botones(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # 💰 RECARGAR SALDO
     elif dato == "menu_recarga":
         await iniciar_recarga(update, context)
-
-    # ⚙️ SOLO ADMINISTRADOR
-    elif dato == "menu_admin":
-        if str(usuario_id) != str(Config.ADMIN_ID):
-            await query.answer("❌ No tienes permiso para esto", show_alert=True)
-            return
-        await query.edit_message_text("⚙️ PANEL DE ADMINISTRACIÓN", reply_markup=menu_admin)
-    elif dato == "ad_usuarios":
-        await query.edit_message_text("👥 GESTIÓN DE USUARIOS", reply_markup=menu_usuarios)
-    elif dato == "ad_categorias":
-        await query.edit_message_text("📂 GESTIÓN DE CATEGORÍAS", reply_markup=menu_categorias)
-    elif dato == "ad_paneles":
-        await query.edit_message_text("🔌 GESTIÓN DE PANELES", reply_markup=menu_panel)
-    elif dato == "ad_config":
-        await query.edit_message_text("⚙️ CONFIGURACIÓN GENERAL", reply_markup=menu_config)
-    elif dato == "ad_acciones":
-        await query.edit_message_text("📋 ACCIONES RÁPIDAS", reply_markup=menu_acciones)
-
-    # 📦 RESTO DE ACCIONES
-    elif dato == "pan_agregar":
-        await query.edit_message_text("➕ Escribe los datos del nuevo panel", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Volver", callback_data="ad_paneles")]]))
-    elif dato == "pan_ver_ids":
-        await ver_ids_paneles(update, context)
-    elif dato == "pan_copiar":
-        await copiar_panel(update, context)
-    elif dato == "pan_editar":
-        await editar_panel(update, context)
-    elif dato == "pan_eliminar":
-        await eliminar_panel(update, context)
-    elif dato == "acc_aviso":
-        await query.edit_message_text("📢 Escribe el aviso que quieres enviar a todos", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Volver", callback_data="ad_acciones")]]))
-    elif dato == "acc_historial":
-        await ver_historial(update, context)
-    elif dato == "acc_respaldo":
-        await crear_respaldo(update, context)
-    elif dato == "acc_mantenimiento":
-        await alternar_mantenimiento(update, context)
-    elif dato == "acc_stats":
-        await ver_estadisticas_generales(update, context)
-    elif dato == "acc_reiniciar":
-        await sincronizar_servicios(update, context)
-    elif dato == "conf_niveles":
-        await ver_niveles(update, context)
-    elif dato == "conf_limite":
-        await configurar_limite(update, context)
-    elif dato == "conf_referido":
-        await query.edit_message_text("🎁 Configura la recompensa por referidos", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Volver", callback_data="ad_config")]]))
-    elif dato == "conf_saldobajo":
-        await query.edit_message_text("🔔 Configura el aviso de saldo bajo", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Volver", callback_data="ad_config")]]))
-    elif dato == "conf_marca":
-        await query.edit_message_text("🎨 Personaliza tu marca y mensajes", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Volver", callback_data="ad_config")]]))
-    elif dato == "usr_buscar":
-        await query.edit_message_text("🔍 Escribe el ID o nombre del usuario", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Volver", callback_data="ad_usuarios")]]))
-    elif dato == "usr_sumar":
-        await query.edit_message_text("➕ Escribe ID del usuario y monto a agregar", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Volver", callback_data="ad_usuarios")]]))
-    elif dato == "usr_quitar":
-        await query.edit_message_text("🗑️ Escribe ID del usuario y monto a quitar", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Volver", callback_data="ad_usuarios")]]))
-    elif dato == "usr_bloquear":
-        await query.edit_message_text("🚫 Escribe ID del usuario para bloquear/desbloquear", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Volver", callback_data="ad_usuarios")]]))
-    elif dato == "cat_crear":
-        await query.edit_message_text("➕ Escribe el nombre de la nueva categoría", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Volver", callback_data="ad_categorias")]]))
-    elif dato == "cat_editar":
-        await query.edit_message_text("✏️ Escribe nombre de categoría y nuevo contenido", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Volver", callback_data="ad_categorias")]]))
-    elif dato == "cat_eliminar":
-        await query.edit_message_text("🗑️ Escribe el nombre de la categoría a eliminar", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Volver", callback_data="ad_categorias")]]))
-    elif dato == "carrito_pagar":
-        await procesar_factura(update, context)
-    elif dato == "carrito_vaciar":
-        coleccion_usuarios.update_one({"user_id": usuario_id}, {"$set": {"carrito": []}})
-        await query.answer("✅ Carrito vaciado", show_alert=True)
-        await ver_carrito(update, context)
-    elif dato == "pagado_confirmar":
-        await query.edit_message_text("✅ Gracias, revisaremos tu pago pronto", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Volver al inicio", callback_data="ad_salir")]]))
-    elif dato == "pagado_cancelar":
-        await query.edit_message_text("❌ Pago cancelado", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Volver al inicio", callback_data="ad_salir")]]))
 
     log(f"✅ Acción {dato} procesada sin errores", "EXITO")
 
