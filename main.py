@@ -284,6 +284,8 @@ async def iniciar_todo():
 
     print("🤖 Conectando al bot...")
     bot_app = ApplicationBuilder().token(Config.BOT_TOKEN).build()
+    # ✅ LÍNEA OBLIGATORIA QUE FALTABA
+    await bot_app.initialize()
 
     # 📋 TODOS LOS COMANDOS
     bot_app.add_handler(CommandHandler("start", inicio))
@@ -321,7 +323,7 @@ async def iniciar_todo():
     bot_app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, recibir_configuracion))
     bot_app.add_handler(CallbackQueryHandler(manejar_botones))
 
-    # 🔗 WEBHOOK
+    # 🔗 WEBHOOK - AHORA SÍ ESTÁ TODO INICIALIZADO
     await bot_app.bot.delete_webhook(drop_pending_updates=True)
     await bot_app.bot.set_webhook(url=f"{DOMINIO}/webhook")
     listo = True
@@ -336,7 +338,9 @@ async def iniciar_todo():
             await revisar_estado_paneles(bot_app)
     asyncio.create_task(revisar_periodico())
 
+    # Mantener ejecución correcta
     await bot_app.start()
+    await bot_app.updater.start_polling()
 
 
 if __name__ == "__main__":
