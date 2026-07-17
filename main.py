@@ -127,9 +127,10 @@ async def verificar_suscripcion(user_id, bot):
 
 
 # ==================================================
-# 🎨 BOTONES DEFINIDOS DIRECTAMENTE AQUÍ
+# 🎨 BOTONES DEFINIDOS DIRECTAMENTE AQUÍ (ACTUALIZADOS)
 # ==================================================
 log("🎨 Cargando diseños de botones...", "PASO")
+
 menu_suscripcion = InlineKeyboardMarkup([
     [InlineKeyboardButton("🔗 IR AL CANAL", url="https://t.me/Voltix_Pro")],
     [InlineKeyboardButton("✅ YA ME SUSCRIBÍ", callback_data="verificar_suscripcion")]
@@ -161,11 +162,66 @@ menu_admin = InlineKeyboardMarkup([
     [InlineKeyboardButton("📋 ACCIONES RÁPIDAS", callback_data="ad_acciones")],
     [InlineKeyboardButton("🔙 VOLVER AL INICIO", callback_data="ad_salir")]
 ])
-log("✅ Botones listos para mostrarse", "EXITO")
+
+menu_panel = InlineKeyboardMarkup([
+    [InlineKeyboardButton("➕ AGREGAR NUEVO", callback_data="pan_agregar")],
+    [InlineKeyboardButton("📋 VER LISTA CON ID", callback_data="pan_ver_ids")],
+    [InlineKeyboardButton("📋 COPIAR CONFIGURACIÓN", callback_data="pan_copiar")],
+    [InlineKeyboardButton("✏️ EDITAR", callback_data="pan_editar"),
+     InlineKeyboardButton("🗑️ ELIMINAR", callback_data="pan_eliminar")],
+    [InlineKeyboardButton("🔙 VOLVER", callback_data="menu_admin")]
+])
+
+menu_acciones = InlineKeyboardMarkup([
+    [InlineKeyboardButton("📢 AVISO A TODOS", callback_data="acc_aviso")],
+    [InlineKeyboardButton("📜 HISTORIAL COMPLETO", callback_data="acc_historial"),
+     InlineKeyboardButton("💾 CREAR RESPALDO", callback_data="acc_respaldo")],
+    [InlineKeyboardButton("🚧 MODO MANTENIMIENTO", callback_data="acc_mantenimiento"),
+     InlineKeyboardButton("📊 ESTADÍSTICAS", callback_data="acc_stats")],
+    [InlineKeyboardButton("🔄 SINCRONIZAR SERVICIOS", callback_data="acc_reiniciar")],
+    [InlineKeyboardButton("🔙 VOLVER", callback_data="menu_admin")]
+])
+
+menu_config = InlineKeyboardMarkup([
+    [InlineKeyboardButton("🏅 NIVELES Y DESCUENTOS", callback_data="conf_niveles")],
+    [InlineKeyboardButton("🚧 LÍMITE DE GASTO DIARIO", callback_data="conf_limite"),
+     InlineKeyboardButton("🎁 RECOMPENSA POR REFERIDOS", callback_data="conf_referido")],
+    [InlineKeyboardButton("🔔 AVISO DE SALDO BAJO", callback_data="conf_saldobajo")],
+    [InlineKeyboardButton("🎨 PERSONALIZAR TU MARCA", callback_data="conf_marca")],
+    [InlineKeyboardButton("🔙 VOLVER", callback_data="menu_admin")]
+])
+
+menu_usuarios = InlineKeyboardMarkup([
+    [InlineKeyboardButton("🔍 BUSCAR USUARIO", callback_data="usr_buscar")],
+    [InlineKeyboardButton("➕ AGREGAR SALDO", callback_data="usr_sumar"),
+     InlineKeyboardButton("🗑️ QUITAR SALDO", callback_data="usr_quitar")],
+    [InlineKeyboardButton("🚫 BLOQUEAR / DESBLOQUEAR", callback_data="usr_bloquear")],
+    [InlineKeyboardButton("🔙 VOLVER", callback_data="menu_admin")]
+])
+
+menu_categorias = InlineKeyboardMarkup([
+    [InlineKeyboardButton("➕ CREAR CATEGORÍA", callback_data="cat_crear")],
+    [InlineKeyboardButton("✏️ EDITAR", callback_data="cat_editar"),
+     InlineKeyboardButton("🗑️ ELIMINAR", callback_data="cat_eliminar")],
+    [InlineKeyboardButton("🔙 VOLVER", callback_data="menu_admin")]
+])
+
+botones_carrito = InlineKeyboardMarkup([
+    [InlineKeyboardButton("✅ PAGAR TODO", callback_data="carrito_pagar")],
+    [InlineKeyboardButton("🗑️ VACIAR CARRITO", callback_data="carrito_vaciar")],
+    [InlineKeyboardButton("🔙 VOLVER A TIENDA", callback_data="menu_tienda")]
+])
+
+botones_factura = InlineKeyboardMarkup([
+    [InlineKeyboardButton("✅ YA REALICÉ EL PAGO", callback_data="pagado_confirmar")],
+    [InlineKeyboardButton("❌ CANCELAR", callback_data="pagado_cancelar")]
+])
+
+log("✅ Todos los botones listos", "EXITO")
 
 
 # ==================================================
-# 🛡️ FUNCIONES DE RESPALDO POR SI FALTAN ARCHIVOS
+# 🛡️ FUNCIONES DE RESPALDO
 # ==================================================
 async def funcion_vacia(*args, **kwargs):
     await args[0].edit_message_text("🔧 Función en construcción", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Volver", callback_data="ad_salir")]]))
@@ -183,8 +239,9 @@ cambiar_moneda = funcion_vacia
 ver_faq = funcion_vacia
 obtener_estadisticas = lambda: {"usuarios":0, "activos":0, "ganancia_total":0, "mas_vendidos":[]}
 
+
 # ==================================================
-# 📂 CARGA DE MÓDULOS ORIGINALES (si existen reemplazan a las de respaldo)
+# 📂 CARGA DE MÓDULOS
 # ==================================================
 log("📂 Cargando archivos y módulos del sistema...", "PASO")
 try:
@@ -227,7 +284,7 @@ except Exception as e:
 
 
 # ==================================================
-# 🌐 SERVIDOR WEB PARA MANTENERLO ACTIVO
+# 🌐 SERVIDOR WEB
 # ==================================================
 log("🌐 Preparando servidor web...", "PASO")
 try:
@@ -253,7 +310,7 @@ except Exception as e:
 
 
 # ==================================================
-# 🤖 COMANDO /START CON BOTONES GARANTIZADOS
+# 🤖 COMANDO /START
 # ==================================================
 async def inicio(update: Update, context: ContextTypes.DEFAULT_TYPE):
     usuario_id = update.effective_user.id
@@ -383,12 +440,17 @@ async def manejar_botones(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await query.answer("❌ Sin permiso", show_alert=True)
             return
         await query.edit_message_text("⚙️ PANEL DE ADMINISTRACIÓN", reply_markup=menu_admin)
+    elif dato == "ad_usuarios": await query.edit_message_text("👥 GESTIÓN DE USUARIOS", reply_markup=menu_usuarios)
+    elif dato == "ad_categorias": await query.edit_message_text("📂 GESTIÓN DE CATEGORÍAS", reply_markup=menu_categorias)
+    elif dato == "ad_paneles": await query.edit_message_text("🔌 GESTIÓN DE PANELES", reply_markup=menu_panel)
+    elif dato == "ad_config": await query.edit_message_text("⚙️ CONFIGURACIÓN GENERAL", reply_markup=menu_config)
+    elif dato == "ad_acciones": await query.edit_message_text("📋 ACCIONES RÁPIDAS", reply_markup=menu_acciones)
 
     log(f"✅ Acción {dato} procesada", "EXITO")
 
 
 # ==================================================
-# 🚀 ARRANQUE FINAL Y CONEXIÓN
+# 🚀 ARRANQUE FINAL SIN CONFLICTOS
 # ==================================================
 async def ejecutar_bot():
     log("🔗 Conectando base de datos...", "PASO")
@@ -402,9 +464,12 @@ async def ejecutar_bot():
     log("🤖 Conectando con Telegram...", "PASO")
     bot_app = ApplicationBuilder().token(Config.BOT_TOKEN).build()
 
+    # ✅ ELIMINA CUALQUIER OTRA CONEXIÓN ABIERTA ANTES DE ARRANCAR
+    await bot_app.bot.delete_webhook(drop_pending_updates=True)
+    log("🔌 Conexiones antiguas eliminadas", "EXITO")
+
     # ✅ TODOS LOS COMANDOS REGISTRADOS
     bot_app.add_handler(CommandHandler("start", inicio))
-    bot_app.add_handler(CommandHandler("cambiar", cambiar_ajuste if 'cambiar_ajuste' in locals() else funcion_vacia))
     bot_app.add_handler(CommandHandler("permisos", dar_permisos if 'dar_permisos' in locals() else funcion_vacia))
     bot_app.add_handler(CommandHandler("rol", cambiar_rol if 'cambiar_rol' in locals() else funcion_vacia))
     bot_app.add_handler(CommandHandler("addsaldo", recargar_saldo_manual if 'recargar_saldo_manual' in locals() else funcion_vacia))
@@ -432,17 +497,18 @@ async def ejecutar_bot():
         bot_app.add_handler(obtener_conv_pagos())
 
     bot_app.add_handler(CallbackQueryHandler(manejar_botones))
-    bot_app.add_handler(MessageHandler(filters.PHOTO, subir_foto_bienvenida if 'subir_foto_bienvenida' in locals() else funcion_vacia))
     bot_app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, funcion_vacia))
-
-    await bot_app.bot.delete_webhook(drop_pending_updates=True)
-    log("🔌 Webhooks antiguos eliminados", "EXITO")
 
     log("="*70, "EXITO")
     log("🎉 🚀 BOT 100% CARGADO Y LISTO", "EXITO")
     log("="*70, "EXITO")
 
-    await bot_app.run_polling(drop_pending_updates=True)
+    # ✅ SIN CONFLICTOS, SOLO UNA INSTANCIA PERMITIDA
+    await bot_app.run_polling(
+        drop_pending_updates=True,
+        allowed_updates=Update.ALL_TYPES,
+        close_loop=False
+    )
 
 if __name__ == "__main__":
     try:
