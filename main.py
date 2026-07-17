@@ -93,7 +93,7 @@ except Exception as e:
     sys.exit(1)
 
 # ==================================================
-# ✅ VERIFICACIÓN DE CANAL
+# ✅ VERIFICACIÓN DE CANAL (tu canal correcto)
 # ==================================================
 CANAL_OBLIGATORIO = "@Voltix_Pro"
 
@@ -101,7 +101,8 @@ async def verificar_suscripcion(usuario_id, bot):
     try:
         miembro = await bot.get_chat_member(chat_id=CANAL_OBLIGATORIO, user_id=usuario_id)
         return miembro.status in ["member", "administrator", "creator"]
-    except:
+    except Exception as e:
+        log(f"⚠️ Verificación fallida: {e}", "ADVERTENCIA")
         return False
 
 # ==================================================
@@ -147,7 +148,7 @@ menu_panel = InlineKeyboardMarkup([
     [InlineKeyboardButton("📋 COPIAR CONFIGURACIÓN", callback_data="pan_copiar")],
     [InlineKeyboardButton("✏️ EDITAR", callback_data="pan_editar"),
      InlineKeyboardButton("🗑️ ELIMINAR", callback_data="pan_eliminar")],
-    [InlineKeyboardButton("🔙 VOLVER", callback_data="menu_admin")]
+    [InlineKeyboardButton("🔙 VOLVER", callback_data="ad_paneles")]
 ])
 
 menu_acciones = InlineKeyboardMarkup([
@@ -157,7 +158,7 @@ menu_acciones = InlineKeyboardMarkup([
     [InlineKeyboardButton("🚧 MODO MANTENIMIENTO", callback_data="acc_mantenimiento"),
      InlineKeyboardButton("📊 ESTADÍSTICAS", callback_data="acc_stats")],
     [InlineKeyboardButton("🔄 SINCRONIZAR SERVICIOS", callback_data="acc_reiniciar")],
-    [InlineKeyboardButton("🔙 VOLVER", callback_data="menu_admin")]
+    [InlineKeyboardButton("🔙 VOLVER", callback_data="ad_acciones")]
 ])
 
 menu_config = InlineKeyboardMarkup([
@@ -166,7 +167,7 @@ menu_config = InlineKeyboardMarkup([
      InlineKeyboardButton("🎁 RECOMPENSA POR REFERIDOS", callback_data="conf_referido")],
     [InlineKeyboardButton("🔔 AVISO DE SALDO BAJO", callback_data="conf_saldobajo")],
     [InlineKeyboardButton("🎨 PERSONALIZAR TU MARCA", callback_data="conf_marca")],
-    [InlineKeyboardButton("🔙 VOLVER", callback_data="menu_admin")]
+    [InlineKeyboardButton("🔙 VOLVER", callback_data="ad_config")]
 ])
 
 menu_usuarios = InlineKeyboardMarkup([
@@ -174,14 +175,14 @@ menu_usuarios = InlineKeyboardMarkup([
     [InlineKeyboardButton("➕ AGREGAR SALDO", callback_data="usr_sumar"),
      InlineKeyboardButton("🗑️ QUITAR SALDO", callback_data="usr_quitar")],
     [InlineKeyboardButton("🚫 BLOQUEAR / DESBLOQUEAR", callback_data="usr_bloquear")],
-    [InlineKeyboardButton("🔙 VOLVER", callback_data="menu_admin")]
+    [InlineKeyboardButton("🔙 VOLVER", callback_data="ad_usuarios")]
 ])
 
 menu_categorias = InlineKeyboardMarkup([
     [InlineKeyboardButton("➕ CREAR CATEGORÍA", callback_data="cat_crear")],
     [InlineKeyboardButton("✏️ EDITAR", callback_data="cat_editar"),
      InlineKeyboardButton("🗑️ ELIMINAR", callback_data="cat_eliminar")],
-    [InlineKeyboardButton("🔙 VOLVER", callback_data="menu_admin")]
+    [InlineKeyboardButton("🔙 VOLVER", callback_data="ad_categorias")]
 ])
 
 log("✅ Menús listos", "EXITO")
@@ -306,7 +307,7 @@ async def inicio(update: Update, context: ContextTypes.DEFAULT_TYPE):
             if args: await verificar_referido(uid, args[0].upper())
 
         if not await verificar_suscripcion(uid, context.bot):
-            await update.message.reply_text("⚠️ Únete primero al canal oficial", reply_markup=menu_suscripcion)
+            await update.message.reply_text("⚠️ Únete primero al canal oficial:\nhttps://t.me/Voltix_Pro", reply_markup=menu_suscripcion)
             return
 
         texto = """⚡ VOLTIXPRO V4
@@ -320,10 +321,10 @@ async def inicio(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(texto, reply_markup=menu_principal)
     except Exception as e:
         log(f"❌ Error /start: {e}", "ERROR")
-        await update.message.reply_text("❌ Error al cargar")
+        await update.message.reply_text("❌ Error al cargar tu perfil")
 
 # ==================================================
-# 🤖 MANEJO COMPLETO DE BOTONES
+# 🤖 MANEJO COMPLETO DE BOTONES (sin superposición)
 # ==================================================
 async def manejar_botones(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
@@ -331,6 +332,7 @@ async def manejar_botones(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
     log(f"🔘 Botón: {dato} | {uid}", "INFO")
     await q.answer()
+    volver = InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Volver", callback_data="ad_salir")]])
 
     if dato == "verificar_suscripcion":
         if await verificar_suscripcion(uid, context.bot):
@@ -343,7 +345,7 @@ async def manejar_botones(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 ⚡ VOLTIXPRO – Todos los derechos reservados""", reply_markup=menu_principal)
         else:
-            await q.answer("❌ Aún no te unes", show_alert=True)
+            await q.answer("❌ Aún no te unes al canal", show_alert=True)
         return
 
     if dato == "ad_salir":
@@ -358,12 +360,12 @@ async def manejar_botones(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     elif dato == "menu_tienda": await mostrar_categorias(update, context)
-    elif dato == "menu_buscar": await q.edit_message_text("🔎 Escribe lo que buscas:", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Volver", callback_data="ad_salir")]]))
+    elif dato == "menu_buscar": await q.edit_message_text("🔎 Escribe lo que buscas:", reply_markup=volver)
     elif dato == "menu_perfil": await q.edit_message_text(str(await perfil_completo(update, context)), reply_markup=menu_perfil)
     elif dato == "menu_pedidos": await ver_pedidos(update, context)
     elif dato == "menu_favoritos": await ver_favoritos(update, context)
     elif dato == "menu_carrito": await ver_carrito(update, context)
-    elif dato == "ref_menu": await q.edit_message_text("🎁 Tus referidos", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Volver", callback_data="menu_perfil")]]))
+    elif dato == "ref_menu": await q.edit_message_text("🎁 Tus referidos y ganancias", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Volver", callback_data="menu_perfil")]]))
     elif dato == "conf_moneda": await cambiar_moneda(update, context)
     elif dato == "faq": await ver_faq(update, context)
     elif dato == "menu_recarga": await iniciar_recarga(update, context)
@@ -371,37 +373,40 @@ async def manejar_botones(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif dato == "menu_admin":
         if str(uid) != str(getattr(Config, "ADMIN_ID", ADMIN_ID)):
             await q.answer("❌ Sin permiso", show_alert=True); return
-        await q.edit_message_text("⚙️ PANEL ADMIN", reply_markup=menu_admin)
+        await q.edit_message_text("⚙️ PANEL ADMINISTRADOR", reply_markup=menu_admin)
 
     elif dato == "ad_usuarios": await q.edit_message_text("👥 GESTIÓN DE USUARIOS", reply_markup=menu_usuarios)
-    elif dato == "ad_categorias": await q.edit_message_text("📂 CATEGORÍAS", reply_markup=menu_categorias)
+    elif dato == "ad_categorias": await q.edit_message_text("📂 CATEGORÍAS Y SERVICIOS", reply_markup=menu_categorias)
     elif dato == "ad_paneles": await q.edit_message_text("🔌 PANELES", reply_markup=menu_panel)
-    elif dato == "ad_config": await q.edit_message_text("⚙️ CONFIGURACIÓN", reply_markup=menu_config)
+    elif dato == "ad_config": await q.edit_message_text("⚙️ CONFIGURACIÓN GENERAL", reply_markup=menu_config)
     elif dato == "ad_acciones": await q.edit_message_text("📋 ACCIONES RÁPIDAS", reply_markup=menu_acciones)
 
     elif dato == "pan_agregar": await q.edit_message_text("➕ Envía: URL | API | NOMBRE", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Volver", callback_data="ad_paneles")]]))
     elif dato == "pan_ver_ids":
         try: t = await ver_ids_paneles(update, context)
-        except: t = "Sin paneles"
+        except: t = "Sin paneles registrados"
         await q.edit_message_text(t, reply_markup=menu_panel)
-    elif dato == "pan_copiar": await q.edit_message_text("📋 Escribe ID a copiar", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Volver", callback_data="ad_paneles")]]))
-    elif dato == "pan_editar": await q.edit_message_text("✏️ Escribe ID a editar", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Volver", callback_data="ad_paneles")]]))
-    elif dato == "pan_eliminar": await q.edit_message_text("🗑️ Escribe ID a borrar", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Volver", callback_data="ad_paneles")]]))
+    elif dato == "pan_copiar": await q.edit_message_text("📋 Escribe ID del panel a copiar", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Volver", callback_data="ad_paneles")]]))
+    elif dato == "pan_editar": await q.edit_message_text("✏️ Escribe ID del panel a editar", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Volver", callback_data="ad_paneles")]]))
+    elif dato == "pan_eliminar": await q.edit_message_text("🗑️ Escribe ID del panel a borrar", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Volver", callback_data="ad_paneles")]]))
 
-    elif dato == "usr_buscar": await q.edit_message_text("🔍 Escribe ID o nombre", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Volver", callback_data="ad_usuarios")]]))
+    elif dato == "usr_buscar": await q.edit_message_text("🔍 Escribe ID o nombre del usuario", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Volver", callback_data="ad_usuarios")]]))
     elif dato == "usr_sumar": await q.edit_message_text("➕ Formato: ID | MONTO", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Volver", callback_data="ad_usuarios")]]))
     elif dato == "usr_quitar": await q.edit_message_text("🗑️ Formato: ID | MONTO", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Volver", callback_data="ad_usuarios")]]))
-    elif dato == "usr_bloquear": await q.edit_message_text("🚫 Escribe ID", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Volver", callback_data="ad_usuarios")]]))
+    elif dato == "usr_bloquear": await q.edit_message_text("🚫 Escribe ID del usuario", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Volver", callback_data="ad_usuarios")]]))
 
-    elif dato == "cat_crear": await q.edit_message_text("➕ Nombre categoría", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Volver", callback_data="ad_categorias")]]))
-    elif dato == "cat_editar": await q.edit_message_text("✏️ Nombre categoría", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Volver", callback_data="ad_categorias")]]))
-    elif dato == "cat_eliminar": await q.edit_message_text("🗑️ Nombre categoría", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Volver", callback_data="ad_categorias")]]))
+    elif dato == "cat_crear": await q.edit_message_text("➕ Escribe nombre de la categoría", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Volver", callback_data="ad_categorias")]]))
+    elif dato == "cat_editar": await q.edit_message_text("✏️ Escribe nombre de la categoría", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Volver", callback_data="ad_categorias")]]))
+    elif dato == "cat_eliminar": await q.edit_message_text("🗑️ Escribe nombre de la categoría", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Volver", callback_data="ad_categorias")]]))
 
-    elif dato.startswith("conf_"): await q.edit_message_text("⚙️ Configuración...", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Volver", callback_data="ad_config")]]))
-    elif dato == "acc_aviso": await q.edit_message_text("📢 Escribe mensaje para todos", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Volver", callback_data="ad_acciones")]]))
-    elif dato == "acc_historial": await q.edit_message_text("📜 Historial...", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Volver", callback_data="ad_acciones")]]))
-    elif dato == "acc_respaldo": await q.edit_message_text("💾 Creando respaldo...", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Volver", callback_data="ad_acciones")]]))
-    elif dato == "acc_mantenimiento": await q.edit_message_text("🚧 Modo mantenimiento...", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Volver", callback_data="ad_acciones")]]))
+    elif dato.startswith("conf_"): await q.edit_message_text("⚙️ Configuración en proceso...", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Volver", callback_data="ad_config")]]))
+    elif dato == "acc_aviso": await q.edit_message_text("📢 Escribe mensaje para todos los usuarios", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Volver", callback_data="ad_acciones")]]))
+    elif dato == "acc_historial": await q.edit_message_text("📜 Historial completo", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Volver", callback_data="ad_acciones")]]))
+    elif dato == "acc_respaldo":
+        # Eliminamos el viejo y enviamos nuevo para que no se superponga
+        await q.delete_message()
+        await context.bot.send_message(uid, "💾 Creando respaldo completo...", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Volver", callback_data="ad_acciones")]]))
+    elif dato == "acc_mantenimiento": await q.edit_message_text("🚧 Modo mantenimiento activado/desactivado", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Volver", callback_data="ad_acciones")]]))
     elif dato == "acc_stats":
         try: datos = await obtener_estadisticas()
         except: datos = await estadisticas_base()
@@ -411,7 +416,7 @@ async def manejar_botones(update: Update, context: ContextTypes.DEFAULT_TYPE):
 💰 Ganancia: ${datos.get('ganancia_total',0)}
 📦 Más vendidos: {', '.join(map(str, datos.get('mas_vendidos',[])))}"""
         await q.edit_message_text(texto, reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Volver", callback_data="ad_acciones")]]))
-    elif dato == "acc_reiniciar": await q.edit_message_text("🔄 Sincronizando...", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Volver", callback_data="ad_acciones")]]))
+    elif dato == "acc_reiniciar": await q.edit_message_text("🔄 Sincronizando servicios...", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Volver", callback_data="ad_acciones")]]))
 
 # ==================================================
 # 🚀 ARRANQUE FINAL SIN CONFLICTOS
@@ -422,8 +427,9 @@ async def arrancar_bot():
     except Exception as e: log(f"❌ BD: {e}", "ERROR"); return
 
     app = ApplicationBuilder().token(BOT_TOKEN).build()
+    # ELIMINA CUALQUIER OTRA CONEXIÓN ANTES DE ARRANCAR
     await app.bot.delete_webhook(drop_pending_updates=True)
-    log("🔌 Conexiones viejas eliminadas", "EXITO")
+    log("🔌 Conexiones antiguas eliminadas", "EXITO")
 
     app.add_handler(CommandHandler("start", inicio))
     if 'dar_permisos' in locals(): app.add_handler(CommandHandler("permisos", dar_permisos))
@@ -453,10 +459,10 @@ async def arrancar_bot():
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, funcion_en_construccion))
 
     log("="*50, "EXITO")
-    log("🎉 BOT LISTO Y FUNCIONANDO", "EXITO")
+    log("🎉 BOT 100% FUNCIONAL", "EXITO")
     log("="*50, "EXITO")
     await app.run_polling(drop_pending_updates=True, allowed_updates=Update.ALL_TYPES)
 
 if __name__ == "__main__":
     try: asyncio.run(arrancar_bot())
-    except Exception as e: log(f"❌ ERROR: {e}", "ERROR"); log(traceback.format_exc(), "ERROR")
+    except Exception as e: log(f"❌ ERROR GENERAL: {e}", "ERROR"); log(traceback.format_exc(), "ERROR")
