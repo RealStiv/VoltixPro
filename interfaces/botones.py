@@ -2,80 +2,97 @@ from telegram import InlineKeyboardMarkup, InlineKeyboardButton
 
 # 📌 Verificación de suscripción
 menu_suscripcion = InlineKeyboardMarkup([
-    [InlineKeyboardButton("🔗 IR AL CANAL OFICIAL", url="https://t.me/Voltix_Pro")],
-    [InlineKeyboardButton("✅ YA ME SUSCRIBÍ", callback_data="verificar_sus")]
+    [InlineKeyboardButton("🔗 IR AL CANAL", url="https://t.me/Voltix_Pro")],
+    [InlineKeyboardButton("✅ YA ME SUSCRIBÍ", callback_data="verificar_suscripcion")]
 ])
 
-# 📌 Menú principal usuarios
+# 📌 Menú Principal - Diseño limpio 2 columnas
 menu_principal = InlineKeyboardMarkup([
-    [InlineKeyboardButton("🛒 Tienda SMM", callback_data="menu_tienda")],
-    [InlineKeyboardButton("💰 Recargar Saldo", callback_data="menu_recarga")],
-    [InlineKeyboardButton("👤 Mi Perfil", callback_data="menu_perfil")],
+    [InlineKeyboardButton("🛒 Tienda", callback_data="menu_tienda"),
+     InlineKeyboardButton("🔍 Buscar", callback_data="menu_buscar")],
+    [InlineKeyboardButton("⭐ Favoritos", callback_data="menu_favoritos"),
+     InlineKeyboardButton("🛒 Carrito", callback_data="menu_carrito")],
+    [InlineKeyboardButton("💰 Recargar", callback_data="menu_recarga"),
+     InlineKeyboardButton("👤 Mi Perfil", callback_data="menu_perfil")],
     [InlineKeyboardButton("📦 Mis Pedidos", callback_data="menu_pedidos")],
-    [InlineKeyboardButton("🔧 Herramientas", callback_data="menu_herramientas")],
-    [InlineKeyboardButton("⚙️ Admin Total", callback_data="menu_admin")]
+    [InlineKeyboardButton("⚙️ Administración", callback_data="menu_admin")]
 ])
 
-# 📌 Menú principal Administrador
+# 📌 Menú Principal Administrador
 menu_admin = InlineKeyboardMarkup([
-    [InlineKeyboardButton("👥 Gestión de Usuarios", callback_data="ad_usuarios")],
-    [InlineKeyboardButton("📂 Gestión de Categorías", callback_data="ad_categorias")],
-    [InlineKeyboardButton("➕ Gestión de Paneles", callback_data="ad_panel")],
-    [InlineKeyboardButton("⚙️ Configuración General", callback_data="ad_config")],
-    [InlineKeyboardButton("📊 Acciones Rápidas", callback_data="acc_menu")],
+    [InlineKeyboardButton("👥 Usuarios", callback_data="ad_usuarios"),
+     InlineKeyboardButton("📂 Categorías", callback_data="ad_categorias")],
+    [InlineKeyboardButton("🔌 Paneles", callback_data="ad_paneles"),
+     InlineKeyboardButton("⚙️ Configuración", callback_data="ad_config")],
+    [InlineKeyboardButton("📋 Acciones Rápidas", callback_data="ad_acciones")],
     [InlineKeyboardButton("🔙 Volver al inicio", callback_data="ad_salir")]
 ])
 
-# 📌 Gestión de Paneles (AHORA CON VER IDs)
+# 📌 Gestión de Paneles
 menu_panel = InlineKeyboardMarkup([
     [InlineKeyboardButton("➕ Agregar nuevo", callback_data="pan_agregar")],
-    [InlineKeyboardButton("📋 Ver todos y su ID", callback_data="pan_ver_ids")],
-    [InlineKeyboardButton("✏️ Editar", callback_data="pan_editar")],
-    [InlineKeyboardButton("❌ Eliminar", callback_data="pan_eliminar")],
-    [InlineKeyboardButton("🔙 Volver al menú admin", callback_data="menu_admin")]
+    [InlineKeyboardButton("📋 Ver lista con ID", callback_data="pan_ver_ids")],
+    [InlineKeyboardButton("📋 Copiar configuración", callback_data="pan_copiar")],
+    [InlineKeyboardButton("✏️ Editar", callback_data="pan_editar"),
+     InlineKeyboardButton("🗑️ Eliminar", callback_data="pan_eliminar")],
+    [InlineKeyboardButton("🔙 Volver", callback_data="menu_admin")]
+])
+
+# 📌 Acciones Rápidas
+menu_acciones = InlineKeyboardMarkup([
+    [InlineKeyboardButton("📢 Aviso a todos", callback_data="acc_aviso")],
+    [InlineKeyboardButton("📜 Historial", callback_data="acc_historial"),
+     InlineKeyboardButton("💾 Respaldo", callback_data="acc_respaldo")],
+    [InlineKeyboardButton("🚧 Mantenimiento", callback_data="acc_mantenimiento"),
+     InlineKeyboardButton("📊 Estadísticas", callback_data="acc_stats")],
+    [InlineKeyboardButton("🔄 Sincronizar", callback_data="acc_reiniciar")],
+    [InlineKeyboardButton("🔙 Volver", callback_data="menu_admin")]
+])
+
+# 📌 Configuración General
+menu_config = InlineKeyboardMarkup([
+    [InlineKeyboardButton("🏅 Niveles y descuentos", callback_data="conf_niveles")],
+    [InlineKeyboardButton("🚧 Límite de gasto", callback_data="conf_limite"),
+     InlineKeyboardButton("🎁 Recompensa referidos", callback_data="conf_referido")],
+    [InlineKeyboardButton("🔔 Aviso saldo bajo", callback_data="conf_saldobajo"),
+     InlineKeyboardButton("🔒 Seguridad", callback_data="conf_seguridad")],
+    [InlineKeyboardButton("🔙 Volver", callback_data="menu_admin")]
 ])
 
 # 📌 Gestión de Usuarios
 menu_usuarios = InlineKeyboardMarkup([
     [InlineKeyboardButton("🔍 Buscar usuario", callback_data="usr_buscar")],
-    [InlineKeyboardButton("➕ Agregar saldo", callback_data="usr_sumar")],
-    [InlineKeyboardButton("➖ Quitar saldo", callback_data="usr_restar")],
-    [InlineKeyboardButton("🚫 Bloquear", callback_data="usr_bloquear")],
-    [InlineKeyboardButton("✅ Desbloquear", callback_data="usr_desbloquear")],
-    [InlineKeyboardButton("🔙 Volver al menú admin", callback_data="menu_admin")]
+    [InlineKeyboardButton("➕ Agregar saldo", callback_data="usr_sumar"),
+     InlineKeyboardButton("🗑️ Quitar saldo", callback_data="usr_quitar")],
+    [InlineKeyboardButton("🚫 Bloquear/Desbloquear", callback_data="usr_bloquear")],
+    [InlineKeyboardButton("🔙 Volver", callback_data="menu_admin")]
 ])
 
 # 📌 Gestión de Categorías
 menu_categorias = InlineKeyboardMarkup([
     [InlineKeyboardButton("➕ Crear categoría", callback_data="cat_crear")],
-    [InlineKeyboardButton("✏️ Editar categoría", callback_data="cat_editar")],
-    [InlineKeyboardButton("❌ Eliminar categoría", callback_data="cat_eliminar")],
-    [InlineKeyboardButton("🔙 Volver al menú admin", callback_data="menu_admin")]
+    [InlineKeyboardButton("✏️ Editar", callback_data="cat_editar"),
+     InlineKeyboardButton("🗑️ Eliminar", callback_data="cat_eliminar")],
+    [InlineKeyboardButton("🔙 Volver", callback_data="menu_admin")]
 ])
 
-# 📌 Configuración General
-menu_config = InlineKeyboardMarkup([
-    [InlineKeyboardButton("💵 Monto mínimo recarga", callback_data="conf_minimo")],
-    [InlineKeyboardButton("📢 Canal obligatorio", callback_data="conf_canal")],
-    [InlineKeyboardButton("🔑 Datos de pago", callback_data="conf_pago")],
-    [InlineKeyboardButton("📈 % Ganancia por venta", callback_data="conf_margen")],
-    [InlineKeyboardButton("🔙 Volver al menú admin", callback_data="menu_admin")]
+# 📌 Acciones Carrito
+botones_carrito = InlineKeyboardMarkup([
+    [InlineKeyboardButton("✅ Pagar todo", callback_data="carrito_pagar")],
+    [InlineKeyboardButton("🗑️ Vaciar carrito", callback_data="carrito_vaciar")],
+    [InlineKeyboardButton("🔙 Volver a tienda", callback_data="menu_tienda")]
 ])
 
-# 📌 Acciones Rápidas
-menu_acciones = InlineKeyboardMarkup([
-    [InlineKeyboardButton("📢 Enviar aviso a todos", callback_data="acc_aviso")],
-    [InlineKeyboardButton("📊 Ver estadísticas", callback_data="acc_stats")],
-    [InlineKeyboardButton("🔄 Sincronizar servicios", callback_data="acc_reiniciar")],
-    [InlineKeyboardButton("🔙 Volver al menú admin", callback_data="menu_admin")]
-])
-
-# 📌 Botones para facturas
+# 📌 Confirmación de pago
 botones_factura = InlineKeyboardMarkup([
-    [InlineKeyboardButton("✅ Ya realicé el pago", callback_data="pagado")],
-    [InlineKeyboardButton("❌ Cancelar", callback_data="cancelar_pago")]
+    [InlineKeyboardButton("✅ Ya realicé el pago", callback_data="pagado_confirmar")],
+    [InlineKeyboardButton("❌ Cancelar", callback_data="pagado_cancelar")]
 ])
 
-botones_lista_facturas = InlineKeyboardMarkup([
-    [InlineKeyboardButton("🔙 Volver a recargas", callback_data="menu_recarga")]
+# 📌 Perfil de usuario
+menu_perfil = InlineKeyboardMarkup([
+    [InlineKeyboardButton("🎁 Mis referidos", callback_data="ref_menu"),
+     InlineKeyboardButton("💱 Cambiar moneda", callback_data="conf_moneda")],
+    [InlineKeyboardButton("❓ Ayuda y FAQ", callback_data="faq_menu")],
+    [InlineKeyboardButton("🔙 Menú principal", callback_data="ad_salir")]
 ])
