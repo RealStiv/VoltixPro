@@ -12,27 +12,22 @@ from datetime import datetime
 # ==================================================
 RUTA_LOG = "voltixpro_logs.txt"
 
-# Formato que verás en pantalla y archivo
 formato_registro = logging.Formatter(
     "%(asctime)s | %(levelname)-8s | %(mensaje)s",
     datefmt="%d/%m/%Y %H:%M:%S"
 )
 
-# Configurar que muestre todo
 logger = logging.getLogger("VoltixPro")
 logger.setLevel(logging.DEBUG)
 
-# Mostrar en la terminal
 consola = logging.StreamHandler(sys.stdout)
 consola.setFormatter(formato_registro)
 logger.addHandler(consola)
 
-# Guardar también en archivo por si necesitas revisarlo
 archivo = logging.FileHandler(RUTA_LOG, encoding="utf-8")
 archivo.setFormatter(formato_registro)
 logger.addHandler(archivo)
 
-# Función corta para escribir registros
 def log(mensaje, nivel="INFO"):
     niveles = {
         "INFO": logger.info,
@@ -54,7 +49,6 @@ log("⚡ INICIANDO VOLTIXPRO V4 CON REGISTRO COMPLETO", "PASO")
 log("="*70, "PASO")
 log(f"🐍 Versión de Python: {sys.version}", "DETALLE")
 
-# Solución definitiva al error de bucle
 log("🔧 Aplicando corrección de conflictos de bucle...", "PASO")
 nest_asyncio.apply()
 os.environ['SSL_CERT_FILE'] = certifi.where()
@@ -69,7 +63,7 @@ try:
     import warnings
     warnings.filterwarnings("ignore")
     from dotenv import load_dotenv
-    from telegram import Update
+    from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
     from telegram.ext import (
         ApplicationBuilder, CommandHandler, ContextTypes,
         CallbackQueryHandler, MessageHandler, filters
@@ -110,7 +104,30 @@ except Exception as e:
 
 
 # ==================================================
-# 📂 CARGA DE TUS ARCHIVOS DEL SISTEMA
+# ✅ FUNCIÓN DE VERIFICACIÓN DE CANAL (YA AQUÍ MISMO)
+# ==================================================
+CANAL_OBLIGATORIO = "@Voltix_Pro"
+
+async def verificar_suscripcion(user_id, bot):
+    try:
+        log(f"🔍 Comprobando membresía de {user_id} en {CANAL_OBLIGATORIO}", "DETALLE")
+        miembro = await bot.get_chat_member(chat_id=CANAL_OBLIGATORIO, user_id=user_id)
+        estados_validos = ["member", "administrator", "creator"]
+        es_miembro = miembro.status in estados_validos
+        
+        if es_miembro:
+            log(f"✅ Usuario {user_id} SÍ está suscrito", "EXITO")
+        else:
+            log(f"⚠️ Usuario {user_id} NO está suscrito, estado: {miembro.status}", "ADVERTENCIA")
+        
+        return es_miembro
+    except Exception as e:
+        log(f"❌ Error al revisar membresía: {str(e)}", "ERROR")
+        return False
+
+
+# ==================================================
+# 📂 CARGA DEL RESTO DE TUS MÓDULOS
 # ==================================================
 log("📂 Cargando archivos y módulos del sistema...", "PASO")
 try:
@@ -124,7 +141,6 @@ try:
         menu_principal, menu_suscripcion, menu_admin, menu_usuarios,
         menu_categorias, menu_panel, menu_config, menu_acciones, menu_perfil
     )
-    from modulos.acceso import verificar_suscripcion
     from modulos.pagos_facturas import obtener_conv_pagos, procesar_factura, iniciar_recarga
     from modulos.tienda_categorias import mostrar_categorias, mostrar_servicios
     from modulos.pedidos import ver_pedidos
@@ -147,7 +163,6 @@ try:
     from modulos.diagnostico import diagnosticar_panel, probar_servicio
     from modulos.estadisticas_avanzadas import obtener_estadisticas
     from modulos.personalizacion import cambiar_ajuste, bienvenida_personalizada, subir_foto_bienvenida, obtener_ajuste
-    from datetime import datetime
     log("✅ Todos los módulos cargados sin errores", "EXITO")
 except Exception as e:
     log(f"❌ ERROR CARGANDO ARCHIVOS: {str(e)}", "ERROR")
@@ -183,7 +198,7 @@ except Exception as e:
 
 
 # ==================================================
-# 🤖 FUNCIONES DEL BOT CON REGISTRO
+# 🤖 FUNCIONES DEL BOT
 # ==================================================
 log("🤖 Definiendo funciones del bot...", "PASO")
 esperando_respuesta = {}
@@ -225,12 +240,17 @@ async def inicio(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 "creado_en": datetime.now()
             })
         
-        if not await verificar_suscripcion(update, context):
-            canal = await obtener_ajuste("canal_obligatorio", "@Voltix_Pro")
-            log("🔔 No está en el canal requerido, pidiendo unión", "DETALLE")
+        # ✅ VERIFICACIÓN CORREGIDA
+        esta_suscrito = await verificar_suscripcion(user.id, context.bot)
+        if not esta_suscrito:
+            log("🔔 No está en el canal requerido, mostrando aviso", "DETALLE")
+            teclado = InlineKeyboardMarkup([
+                [InlineKeyboardButton("🔗 IR AL CANAL", url=f"https://t.me/{CANAL_OBLIGATORIO.replace('@','')}")],
+                [InlineKeyboardButton("✅ YA ME SUSCRIBÍ", callback_data="verificar_suscripcion")]
+            ])
             await update.message.reply_text(
-                f"🔔 Antes de empezar debes unirte al canal oficial:\n{canal}",
-                reply_markup=menu_suscripcion
+                f"🔔 Antes de empezar debes unirte al canal oficial:\n{CANAL_OBLIGATORIO}",
+                reply_markup=teclado
             )
             return
         
@@ -282,15 +302,21 @@ async def ver_estadisticas_generales(update: Update, context: ContextTypes.DEFAU
 async def manejar_botones(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     dato = query.data.strip()
-    log(f"🔘 BOTÓN PULSADO: {dato} | USUARIO: {update.effective_user.id}", "INFO")
+    usuario_id = update.effective_user.id
+    log(f"🔘 BOTÓN PULSADO: {dato} | USUARIO: {usuario_id}", "INFO")
+
+    # ✅ BOTÓN DE YA ME SUSCRIBÍ
+    if dato == "verificar_suscripcion":
+        ok = await verificar_suscripcion(usuario_id, context.bot)
+        if ok:
+            await query.answer("✅ ¡Perfecto! Ya estás dentro", show_alert=True)
+            await bienvenida_personalizada(update, context)
+        else:
+            await query.answer("❌ Aún no te unes al canal", show_alert=True)
+        return
 
     try:
-        if dato == "verificar_suscripcion":
-            if await verificar_suscripcion(update, context):
-                await bienvenida_personalizada(update, context)
-            else:
-                await query.answer("❌ Aún no te unes al canal", show_alert=True)
-        elif dato == "menu_tienda": await mostrar_categorias(update, context)
+        if dato == "menu_tienda": await mostrar_categorias(update, context)
         elif dato == "menu_buscar": await query.edit_message_text("🔎 Escribe: /buscar seguidores instagram")
         elif dato == "menu_favoritos": await ver_favoritos(update, context)
         elif dato == "menu_carrito": await ver_carrito(update, context)
@@ -300,7 +326,7 @@ async def manejar_botones(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await perfil_completo(update, context)
         elif dato == "menu_pedidos": await ver_pedidos(update, context)
         elif dato == "menu_admin":
-            if update.effective_user.id == Config.ADMIN_ID:
+            if usuario_id == Config.ADMIN_ID:
                 await query.edit_message_text("⚙️ PANEL DE ADMINISTRACIÓN", reply_markup=menu_admin)
             else:
                 await query.answer("❌ Solo el administrador", show_alert=True)
@@ -316,7 +342,7 @@ async def manejar_botones(update: Update, context: ContextTypes.DEFAULT_TYPE):
         elif dato == "pan_editar": await query.edit_message_text("✏️ Escribe: /editarpanel ID CAMPO NUEVO_VALOR")
         elif dato == "pan_eliminar": await query.edit_message_text("🗑️ Escribe: /eliminarpanel ID_DEL_PANEL")
         elif dato == "acc_aviso":
-            esperando_respuesta[update.effective_user.id] = "mensaje_aviso"
+            esperando_respuesta[usuario_id] = "mensaje_aviso"
             await query.edit_message_text("📢 Escribe el mensaje que recibirán todos:")
         elif dato == "acc_historial": await ver_historial(update, context)
         elif dato == "acc_respaldo": await crear_respaldo(update, context)
@@ -325,13 +351,13 @@ async def manejar_botones(update: Update, context: ContextTypes.DEFAULT_TYPE):
         elif dato == "acc_reiniciar": await sincronizar_servicios(update, context)
         elif dato == "conf_niveles": await ver_niveles(update, context)
         elif dato == "conf_limite":
-            esperando_respuesta[update.effective_user.id] = "limite_diario"
+            esperando_respuesta[usuario_id] = "limite_diario"
             await query.edit_message_text("🚧 Escribe el monto límite por día:")
         elif dato == "conf_referido":
-            esperando_respuesta[update.effective_user.id] = "recompensa_referido"
+            esperando_respuesta[usuario_id] = "recompensa_referido"
             await query.edit_message_text("🎁 Escribe cuánto ganan por cada referido:")
         elif dato == "conf_saldobajo":
-            esperando_respuesta[update.effective_user.id] = "aviso_saldo_minimo"
+            esperando_respuesta[usuario_id] = "aviso_saldo_minimo"
             await query.edit_message_text("🔔 Avisar cuando el saldo baje de:")
         elif dato == "conf_marca":
             await query.edit_message_text("""🎨 PERSONALIZAR TU MARCA
@@ -345,7 +371,7 @@ Comandos disponibles:
 
 Simplemente envía una foto para ponerla de portada.""")
         elif dato == "carrito_vaciar":
-            coleccion_usuarios.update_one({"user_id": update.effective_user.id}, {"$set": {"carrito": []}})
+            coleccion_usuarios.update_one({"user_id": usuario_id}, {"$set": {"carrito": []}})
             await query.answer("✅ Carrito vaciado", show_alert=True)
             await ver_carrito(update, context)
         elif dato.startswith("ver_cat_"):
@@ -360,7 +386,7 @@ Simplemente envía una foto para ponerla de portada.""")
 
 
 # ==================================================
-# 🚀 ARRANQUE FINAL Y CONEXIÓN CORREGIDO
+# 🚀 ARRANQUE FINAL Y CONEXIÓN
 # ==================================================
 async def ejecutar_bot():
     log("🔗 Conectando y preparando base de datos...", "PASO")
@@ -375,7 +401,6 @@ async def ejecutar_bot():
     log("🤖 Conectando con los servidores de Telegram...", "PASO")
     bot_app = ApplicationBuilder().token(Config.BOT_TOKEN).build()
 
-    # REGISTRO DE TODOS LOS COMANDOS
     bot_app.add_handler(CommandHandler("start", inicio))
     bot_app.add_handler(CommandHandler("cambiar", cambiar_ajuste))
     bot_app.add_handler(CommandHandler("bienvenida", bienvenida_personalizada))
@@ -429,11 +454,9 @@ async def ejecutar_bot():
 
 if __name__ == "__main__":
     try:
-        # ✅ Flask va en su propio hilo secundario
         Thread(target=iniciar_servidor_web, daemon=True).start()
         log("🌐 Servidor web iniciado correctamente", "EXITO")
 
-        # ✅ EL BOT VA DIRECTAMENTE EN EL HILO PRINCIPAL
         log("🤖 Iniciando conexión con Telegram...", "PASO")
         asyncio.run(ejecutar_bot())
 
