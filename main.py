@@ -118,11 +118,12 @@ async def manejar_botones(update: Update, context: ContextTypes.DEFAULT_TYPE):
     print(f"🔘 BOTÓN PRESIONADO: '{dato}'")
     
     if dato == "verificar_sus":
-        if await verificar_suscripcion(update, context):
-            await query.edit_message_text(t("suscrito_correcto"), parse_mode="HTML")
-            await inicio(update, context)
-        else:
-            await query.answer("❌ Aún no te suscribiste al canal", show_alert=True)
+    await query.answer()
+    if await verificar_suscripcion(update, context):
+        await query.edit_message_text(t("suscrito_correcto"), parse_mode="HTML")
+        await inicio(update, context)
+    else:
+        await query.answer("❌ Aún no apareces como suscrito. Espera 1 minuto y vuelve a pulsar", show_alert=True)
     
     elif dato.startswith("ver_cat_"):
         categoria = dato.split("_", 2)[2]
