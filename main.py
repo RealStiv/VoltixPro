@@ -104,7 +104,7 @@ except Exception as e:
 
 
 # ==================================================
-# ✅ FUNCIÓN DE VERIFICACIÓN DE CANAL (YA AQUÍ MISMO)
+# ✅ VERIFICACIÓN DE CANAL
 # ==================================================
 CANAL_OBLIGATORIO = "@Voltix_Pro"
 
@@ -127,7 +127,7 @@ async def verificar_suscripcion(user_id, bot):
 
 
 # ==================================================
-# 📂 CARGA DEL RESTO DE TUS MÓDULOS
+# 📂 CARGA DE MÓDULOS Y BOTONES
 # ==================================================
 log("📂 Cargando archivos y módulos del sistema...", "PASO")
 try:
@@ -138,8 +138,9 @@ try:
         iniciar_configuracion
     )
     from interfaces.botones import (
-        menu_principal, menu_suscripcion, menu_admin, menu_usuarios,
-        menu_categorias, menu_panel, menu_config, menu_acciones, menu_perfil
+        menu_suscripcion, menu_principal, menu_perfil, menu_admin,
+        menu_panel, menu_acciones, menu_config, menu_usuarios,
+        menu_categorias, botones_carrito, botones_factura
     )
     from modulos.pagos_facturas import obtener_conv_pagos, procesar_factura, iniciar_recarga
     from modulos.tienda_categorias import mostrar_categorias, mostrar_servicios
@@ -159,9 +160,9 @@ try:
     from modulos.tienda_avanzada import buscar_servicios, ver_favoritos, ver_carrito
     from modulos.referidos import asignar_codigo_referido, verificar_referido
     from modulos.preferencias_usuario import cambiar_moneda, revisar_saldo_bajo
-    from modulos.soporte_faq import ver_faq
+    from modulos.soporte_faq import ver_faq, perfil_completo
     from modulos.diagnostico import diagnosticar_panel, probar_servicio
-    from modulos.estadisticas_avanzadas import obtener_estadisticas
+    from modulos.estadisticas import obtener_estadisticas
     from modulos.personalizacion import cambiar_ajuste, bienvenida_personalizada, subir_foto_bienvenida, obtener_ajuste
     log("✅ Todos los módulos cargados sin errores", "EXITO")
 except Exception as e:
@@ -198,14 +199,11 @@ except Exception as e:
 
 
 # ==================================================
-# 🤖 FUNCIONES DEL BOT
+# 🤖 COMANDO /START
 # ==================================================
-log("🤖 Definiendo funciones del bot...", "PASO")
-esperando_respuesta = {}
-
 async def inicio(update: Update, context: ContextTypes.DEFAULT_TYPE):
     usuario_id = update.effective_user.id
-    log(f"📩 COMANDO /start RECIBIDO DE USUARIO: {usuario_id}", "INFO")
+    log(f"📩 COMANDO /START RECIBIDO DE USUARIO: {usuario_id}", "INFO")
     try:
         args = context.args
         user = update.effective_user
@@ -229,7 +227,7 @@ async def inicio(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 "gasto_hoy": 0.0,
                 "ultimo_gasto_dia": None,
                 "codigo_referido": codigo_ref,
-                "referido_por": None,
+                "referido_por": args[0].upper() if args else None,
                 "saldo_referidos": 0.0,
                 "moneda": "USD",
                 "modo_interfaz": "completo",
@@ -240,21 +238,28 @@ async def inicio(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 "creado_en": datetime.now()
             })
         
-        # ✅ VERIFICACIÓN CORREGIDA
+        # ✅ VERIFICACIÓN DE SUSCRIPCIÓN
         esta_suscrito = await verificar_suscripcion(user.id, context.bot)
         if not esta_suscrito:
             log("🔔 No está en el canal requerido, mostrando aviso", "DETALLE")
-            teclado = InlineKeyboardMarkup([
-                [InlineKeyboardButton("🔗 IR AL CANAL", url=f"https://t.me/{CANAL_OBLIGATORIO.replace('@','')}")],
-                [InlineKeyboardButton("✅ YA ME SUSCRIBÍ", callback_data="verificar_suscripcion")]
-            ])
             await update.message.reply_text(
                 f"🔔 Antes de empezar debes unirte al canal oficial:\n{CANAL_OBLIGATORIO}",
-                reply_markup=teclado
+                reply_markup=menu_suscripcion
             )
             return
         
-        await bienvenida_personalizada(update, context)
+        # ✅ MENÚ PRINCIPAL CON EL DISEÑO QUE PEDISTE
+        await update.message.reply_text(
+            """⚡ VOLTIXPRO V4
+¡Bienvenido! Tu tienda de servicios confiable y rápida.
+
+📋 Reglas básicas:
+1. Revisa bien tu enlace antes de pagar.
+2. No hacemos reembolsos por errores tuyos.
+
+⚡ VOLTIXPRO – Todos los derechos reservados""",
+            reply_markup=menu_principal
+        )
         log(f"✅ Bienvenida enviada correctamente a {usuario_id}", "EXITO")
 
     except Exception as e:
@@ -263,126 +268,154 @@ async def inicio(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("❌ Ocurrió un error al procesar tu solicitud")
 
 
-async def recibir_configuracion(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = update.effective_user.id
-    texto = update.message.text.strip()
-    log(f"✏️ Datos de configuración de {user_id}: {texto}", "DETALLE")
-    if user_id not in esperando_respuesta:
-        log("⚠️ No se esperaba respuesta de este usuario", "ADVERTENCIA")
-        return
-    accion = esperando_respuesta.pop(user_id)
-    resultado = await guardar_configuracion(accion, texto)
-    await update.message.reply_text(resultado)
-    log(f"✅ Configuración aplicada para {user_id}", "EXITO")
-
-
-async def ver_estadisticas_generales(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    log(f"📊 Solicitando estadísticas por: {update.effective_user.id}", "INFO")
-    if update.effective_user.id != Config.ADMIN_ID:
-        log("🚫 Intento de acceso sin permiso a estadísticas", "ADVERTENCIA")
-        return await update.callback_query.answer("❌ Sin permiso", show_alert=True)
-    try:
-        est = await obtener_estadisticas()
-        texto = f"""📊 **ESTADÍSTICAS GENERALES**
-
-👥 Usuarios totales: {est['usuarios']}
-✅ Activos: {est['activos']}
-💵 Ganancia total: ${est['ganancia_total']}
-
-🏆 Más vendidos:
-"""
-        for item in est['mas_vendidos']:
-            texto += f"• {item['_id']}: {item['cantidad']} ventas\n"
-        await update.callback_query.edit_message_text(texto, parse_mode="Markdown", reply_markup=menu_acciones)
-        log("✅ Estadísticas mostradas correctamente", "EXITO")
-    except Exception as e:
-        log(f"❌ ERROR CARGANDO ESTADÍSTICAS: {str(e)}", "ERROR")
-
-
+# ==================================================
+# 🤖 MANEJO DE TODOS LOS BOTONES
+# ==================================================
 async def manejar_botones(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     dato = query.data.strip()
     usuario_id = update.effective_user.id
     log(f"🔘 BOTÓN PULSADO: {dato} | USUARIO: {usuario_id}", "INFO")
 
-    # ✅ BOTÓN DE YA ME SUSCRIBÍ
+    await query.answer()
+
+    # ✅ Verificación de suscripción al pulsar el botón
     if dato == "verificar_suscripcion":
         ok = await verificar_suscripcion(usuario_id, context.bot)
         if ok:
-            await query.answer("✅ ¡Perfecto! Ya estás dentro", show_alert=True)
-            await bienvenida_personalizada(update, context)
+            await query.edit_message_text(
+                """⚡ VOLTIXPRO V4
+¡Bienvenido! Tu tienda de servicios confiable y rápida.
+
+📋 Reglas básicas:
+1. Revisa bien tu enlace antes de pagar.
+2. No hacemos reembolsos por errores tuyos.
+
+⚡ VOLTIXPRO – Todos los derechos reservados""",
+                reply_markup=menu_principal
+            )
+            log(f"✅ Verificado correctamente, mostrando menú principal", "EXITO")
         else:
             await query.answer("❌ Aún no te unes al canal", show_alert=True)
         return
 
-    try:
-        if dato == "menu_tienda": await mostrar_categorias(update, context)
-        elif dato == "menu_buscar": await query.edit_message_text("🔎 Escribe: /buscar seguidores instagram")
-        elif dato == "menu_favoritos": await ver_favoritos(update, context)
-        elif dato == "menu_carrito": await ver_carrito(update, context)
-        elif dato == "menu_recarga": await iniciar_recarga(update, context)
-        elif dato == "menu_perfil":
-            from modulos.soporte_faq import perfil_completo
-            await perfil_completo(update, context)
-        elif dato == "menu_pedidos": await ver_pedidos(update, context)
-        elif dato == "menu_admin":
-            if usuario_id == Config.ADMIN_ID:
-                await query.edit_message_text("⚙️ PANEL DE ADMINISTRACIÓN", reply_markup=menu_admin)
-            else:
-                await query.answer("❌ Solo el administrador", show_alert=True)
-        elif dato == "ad_salir": await bienvenida_personalizada(update, context)
-        elif dato == "ad_usuarios": await query.edit_message_text("👥 GESTIÓN DE USUARIOS", reply_markup=menu_usuarios)
-        elif dato == "ad_categorias": await query.edit_message_text("📂 GESTIÓN DE CATEGORÍAS", reply_markup=menu_categorias)
-        elif dato == "ad_paneles": await query.edit_message_text("🔌 GESTIÓN DE PANELES", reply_markup=menu_panel)
-        elif dato == "ad_config": await query.edit_message_text("⚙️ CONFIGURACIÓN GENERAL", reply_markup=menu_config)
-        elif dato == "ad_acciones": await query.edit_message_text("📋 ACCIONES RÁPIDAS", reply_markup=menu_acciones)
-        elif dato == "pan_agregar": await query.edit_message_text("📝 Escribe: /agregarpanel NOMBRE | URL | CLAVE | PORCENTAJE")
-        elif dato == "pan_ver_ids": await ver_ids_paneles(update, context)
-        elif dato == "pan_copiar": await query.edit_message_text("📋 Escribe: /copiarpanel ID_ORIGEN ID_DESTINO")
-        elif dato == "pan_editar": await query.edit_message_text("✏️ Escribe: /editarpanel ID CAMPO NUEVO_VALOR")
-        elif dato == "pan_eliminar": await query.edit_message_text("🗑️ Escribe: /eliminarpanel ID_DEL_PANEL")
-        elif dato == "acc_aviso":
-            esperando_respuesta[usuario_id] = "mensaje_aviso"
-            await query.edit_message_text("📢 Escribe el mensaje que recibirán todos:")
-        elif dato == "acc_historial": await ver_historial(update, context)
-        elif dato == "acc_respaldo": await crear_respaldo(update, context)
-        elif dato == "acc_mantenimiento": await alternar_mantenimiento(update, context)
-        elif dato == "acc_stats": await ver_estadisticas_generales(update, context)
-        elif dato == "acc_reiniciar": await sincronizar_servicios(update, context)
-        elif dato == "conf_niveles": await ver_niveles(update, context)
-        elif dato == "conf_limite":
-            esperando_respuesta[usuario_id] = "limite_diario"
-            await query.edit_message_text("🚧 Escribe el monto límite por día:")
-        elif dato == "conf_referido":
-            esperando_respuesta[usuario_id] = "recompensa_referido"
-            await query.edit_message_text("🎁 Escribe cuánto ganan por cada referido:")
-        elif dato == "conf_saldobajo":
-            esperando_respuesta[usuario_id] = "aviso_saldo_minimo"
-            await query.edit_message_text("🔔 Avisar cuando el saldo baje de:")
-        elif dato == "conf_marca":
-            await query.edit_message_text("""🎨 PERSONALIZAR TU MARCA
+    # ✅ Volver al menú principal
+    if dato == "ad_salir":
+        await query.edit_message_text(
+            """⚡ VOLTIXPRO V4
+¡Bienvenido! Tu tienda de servicios confiable y rápida.
 
-Comandos disponibles:
-/cambiar nombre_bot Tu Nombre
-/cambiar emoji ⚡
-/cambiar mensaje_bienvenida Hola...
-/cambiar pie_pagina © 2026 Tu Marca
-/cambiar reglas 1. Regla uno...
+📋 Reglas básicas:
+1. Revisa bien tu enlace antes de pagar.
+2. No hacemos reembolsos por errores tuyos.
 
-Simplemente envía una foto para ponerla de portada.""")
-        elif dato == "carrito_vaciar":
-            coleccion_usuarios.update_one({"user_id": usuario_id}, {"$set": {"carrito": []}})
-            await query.answer("✅ Carrito vaciado", show_alert=True)
-            await ver_carrito(update, context)
-        elif dato.startswith("ver_cat_"):
-            nombre_cat = dato.split("_", 2)[2]
-            await mostrar_servicios(update, context, nombre_cat)
+⚡ VOLTIXPRO – Todos los derechos reservados""",
+            reply_markup=menu_principal
+        )
+        return
 
-        log(f"✅ Acción {dato} procesada sin errores", "EXITO")
+    # 🛍️ TIENDA Y SERVICIOS
+    elif dato == "menu_tienda":
+        await mostrar_categorias(update, context)
+    elif dato == "menu_buscar":
+        await query.edit_message_text("🔎 Escribe lo que quieres buscar:", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Volver", callback_data="ad_salir")]]))
+    
+    # 👤 PERFIL Y LO QUE TIENE DENTRO
+    elif dato == "menu_perfil":
+        await perfil_completo(update, context)
+    elif dato == "menu_pedidos":
+        await ver_pedidos(update, context)
+    elif dato == "menu_favoritos":
+        await ver_favoritos(update, context)
+    elif dato == "menu_carrito":
+        await ver_carrito(update, context)
+    elif dato == "ref_menu":
+        await query.edit_message_text("🎁 Aquí verás tus referidos y ganancias", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Volver", callback_data="menu_perfil")]]))
+    elif dato == "conf_moneda":
+        await cambiar_moneda(update, context)
+    elif dato == "faq":
+        await ver_faq(update, context)
 
-    except Exception as e:
-        log(f"❌ ERROR AL PROCESAR BOTÓN {dato}: {str(e)}", "ERROR")
-        log(f"🔍 Traza:\n{traceback.format_exc()}", "ERROR")
+    # 💰 RECARGAR SALDO
+    elif dato == "menu_recarga":
+        await iniciar_recarga(update, context)
+
+    # ⚙️ SOLO ADMINISTRADOR
+    elif dato == "menu_admin":
+        if str(usuario_id) != str(Config.ADMIN_ID):
+            await query.answer("❌ No tienes permiso para esto", show_alert=True)
+            return
+        await query.edit_message_text("⚙️ PANEL DE ADMINISTRACIÓN", reply_markup=menu_admin)
+    elif dato == "ad_usuarios":
+        await query.edit_message_text("👥 GESTIÓN DE USUARIOS", reply_markup=menu_usuarios)
+    elif dato == "ad_categorias":
+        await query.edit_message_text("📂 GESTIÓN DE CATEGORÍAS", reply_markup=menu_categorias)
+    elif dato == "ad_paneles":
+        await query.edit_message_text("🔌 GESTIÓN DE PANELES", reply_markup=menu_panel)
+    elif dato == "ad_config":
+        await query.edit_message_text("⚙️ CONFIGURACIÓN GENERAL", reply_markup=menu_config)
+    elif dato == "ad_acciones":
+        await query.edit_message_text("📋 ACCIONES RÁPIDAS", reply_markup=menu_acciones)
+
+    # 📦 RESTO DE ACCIONES
+    elif dato == "pan_agregar":
+        await query.edit_message_text("➕ Escribe los datos del nuevo panel", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Volver", callback_data="ad_paneles")]]))
+    elif dato == "pan_ver_ids":
+        await ver_ids_paneles(update, context)
+    elif dato == "pan_copiar":
+        await copiar_panel(update, context)
+    elif dato == "pan_editar":
+        await editar_panel(update, context)
+    elif dato == "pan_eliminar":
+        await eliminar_panel(update, context)
+    elif dato == "acc_aviso":
+        await query.edit_message_text("📢 Escribe el aviso que quieres enviar a todos", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Volver", callback_data="ad_acciones")]]))
+    elif dato == "acc_historial":
+        await ver_historial(update, context)
+    elif dato == "acc_respaldo":
+        await crear_respaldo(update, context)
+    elif dato == "acc_mantenimiento":
+        await alternar_mantenimiento(update, context)
+    elif dato == "acc_stats":
+        await ver_estadisticas_generales(update, context)
+    elif dato == "acc_reiniciar":
+        await sincronizar_servicios(update, context)
+    elif dato == "conf_niveles":
+        await ver_niveles(update, context)
+    elif dato == "conf_limite":
+        await configurar_limite(update, context)
+    elif dato == "conf_referido":
+        await query.edit_message_text("🎁 Configura la recompensa por referidos", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Volver", callback_data="ad_config")]]))
+    elif dato == "conf_saldobajo":
+        await query.edit_message_text("🔔 Configura el aviso de saldo bajo", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Volver", callback_data="ad_config")]]))
+    elif dato == "conf_marca":
+        await query.edit_message_text("🎨 Personaliza tu marca y mensajes", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Volver", callback_data="ad_config")]]))
+    elif dato == "usr_buscar":
+        await query.edit_message_text("🔍 Escribe el ID o nombre del usuario", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Volver", callback_data="ad_usuarios")]]))
+    elif dato == "usr_sumar":
+        await query.edit_message_text("➕ Escribe ID del usuario y monto a agregar", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Volver", callback_data="ad_usuarios")]]))
+    elif dato == "usr_quitar":
+        await query.edit_message_text("🗑️ Escribe ID del usuario y monto a quitar", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Volver", callback_data="ad_usuarios")]]))
+    elif dato == "usr_bloquear":
+        await query.edit_message_text("🚫 Escribe ID del usuario para bloquear/desbloquear", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Volver", callback_data="ad_usuarios")]]))
+    elif dato == "cat_crear":
+        await query.edit_message_text("➕ Escribe el nombre de la nueva categoría", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Volver", callback_data="ad_categorias")]]))
+    elif dato == "cat_editar":
+        await query.edit_message_text("✏️ Escribe nombre de categoría y nuevo contenido", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Volver", callback_data="ad_categorias")]]))
+    elif dato == "cat_eliminar":
+        await query.edit_message_text("🗑️ Escribe el nombre de la categoría a eliminar", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Volver", callback_data="ad_categorias")]]))
+    elif dato == "carrito_pagar":
+        await procesar_factura(update, context)
+    elif dato == "carrito_vaciar":
+        coleccion_usuarios.update_one({"user_id": usuario_id}, {"$set": {"carrito": []}})
+        await query.answer("✅ Carrito vaciado", show_alert=True)
+        await ver_carrito(update, context)
+    elif dato == "pagado_confirmar":
+        await query.edit_message_text("✅ Gracias, revisaremos tu pago pronto", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Volver al inicio", callback_data="ad_salir")]]))
+    elif dato == "pagado_cancelar":
+        await query.edit_message_text("❌ Pago cancelado", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Volver al inicio", callback_data="ad_salir")]]))
+
+    log(f"✅ Acción {dato} procesada sin errores", "EXITO")
 
 
 # ==================================================
@@ -401,62 +434,26 @@ async def ejecutar_bot():
     log("🤖 Conectando con los servidores de Telegram...", "PASO")
     bot_app = ApplicationBuilder().token(Config.BOT_TOKEN).build()
 
+    # REGISTRO DE MANEJADORES
     bot_app.add_handler(CommandHandler("start", inicio))
-    bot_app.add_handler(CommandHandler("cambiar", cambiar_ajuste))
-    bot_app.add_handler(CommandHandler("bienvenida", bienvenida_personalizada))
-    bot_app.add_handler(CommandHandler("permisos", dar_permisos))
-    bot_app.add_handler(CommandHandler("rol", cambiar_rol))
-    bot_app.add_handler(CommandHandler("addsaldo", recargar_saldo_manual))
-    bot_app.add_handler(CommandHandler("ban", banear_usuario))
-    bot_app.add_handler(CommandHandler("unban", banear_usuario))
-    bot_app.add_handler(CommandHandler("crearcategoria", crear_categoria))
-    bot_app.add_handler(CommandHandler("agregarpanel", agregar_panel_smm))
-    bot_app.add_handler(CommandHandler("editarpanel", editar_panel))
-    bot_app.add_handler(CommandHandler("eliminarpanel", eliminar_panel))
-    bot_app.add_handler(CommandHandler("copiarpanel", copiar_panel))
-    bot_app.add_handler(CommandHandler("actualizar", sincronizar_servicios))
-    bot_app.add_handler(CommandHandler("limite", configurar_limite))
-    bot_app.add_handler(CommandHandler("niveles", ver_niveles))
-    bot_app.add_handler(CommandHandler("respaldo", crear_respaldo))
-    bot_app.add_handler(CommandHandler("buscar", buscar_servicios))
-    bot_app.add_handler(CommandHandler("usarreferido", verificar_referido))
-    bot_app.add_handler(CommandHandler("moneda", cambiar_moneda))
-    bot_app.add_handler(CommandHandler("faq", ver_faq))
-    bot_app.add_handler(CommandHandler("recargar", iniciar_recarga))
-    bot_app.add_handler(CommandHandler("diagnosticar", diagnosticar_panel))
-    bot_app.add_handler(CommandHandler("probar", probar_servicio))
-    bot_app.add_handler(CommandHandler("estadisticas", ver_estadisticas_generales))
-    bot_app.add_handler(CommandHandler("dorks", generar_dorks))
-    bot_app.add_handler(CommandHandler("bin", validar_bin))
-    bot_app.add_handler(CommandHandler("cc", generar_cc))
-
-    bot_app.add_handler(obtener_conv_pagos())
-    bot_app.add_handler(MessageHandler(filters.PHOTO, subir_foto_bienvenida))
-    bot_app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, recibir_configuracion))
     bot_app.add_handler(CallbackQueryHandler(manejar_botones))
 
     await bot_app.bot.delete_webhook(drop_pending_updates=True)
     log("🔌 Cualquier webhook antiguo eliminado", "EXITO")
 
-    async def revisar():
-        while True:
-            await asyncio.sleep(1800)
-            log("⏳ Ejecutando revisión programada de paneles...", "DETALLE")
-            await revisar_estado_paneles(bot_app)
-            log("✅ Revisión finalizada", "DETALLE")
-    asyncio.create_task(revisar())
-
     log("="*70, "EXITO")
     log("🎉 🚀 BOT TOTALMENTE CONECTADO Y ESCUCHANDO MENSAJES", "EXITO")
     log("="*70, "EXITO")
 
-    await bot_app.run_polling(drop_pending_updates=True, close_loop=False)
+    await bot_app.run_polling(drop_pending_updates=True)
 
 if __name__ == "__main__":
     try:
+        # ✅ Servidor web en segundo plano
         Thread(target=iniciar_servidor_web, daemon=True).start()
         log("🌐 Servidor web iniciado correctamente", "EXITO")
 
+        # ✅ Bot en el hilo principal
         log("🤖 Iniciando conexión con Telegram...", "PASO")
         asyncio.run(ejecutar_bot())
 
