@@ -93,7 +93,6 @@ Selecciona una categoría para ver los servicios disponibles:
 ⚙️ Paneles SMM conectados: {paneles}
 """,
 
-    # Textos generales complementarios de la V4
     "acceso_denegado": "❌ No tienes permiso para realizar esta acción.",
     "error_general": "⚠️ Ocurrió un error, intenta nuevamente más tarde.",
     "modo_mantenimiento": "🚧 <b>MODO MANTENIMIENTO ACTIVO</b>\nEstamos realizando mejoras, vuelve en unos minutos.",
@@ -106,21 +105,22 @@ Selecciona una categoría para ver los servicios disponibles:
     "guardado_correctamente": "✅ Se guardó todo correctamente."
 }
 
-def t(clave, **kwargs):
-    # Busca primero si tienes el texto personalizado en la configuración
+async def t(clave, **kwargs):
+    # Primero busca si tienes el texto personalizado
     personalizado = await obtener_ajuste(clave)
     if personalizado is not None:
         return personalizado
 
-    # Si falta el texto, devuelve aviso en lugar de error
+    # Si no existe el texto
     if clave not in T:
         return f"ℹ️ Texto no configurado: {clave}"
     
+    # Datos base con valores por defecto seguros
     return T[clave].format(
         version=getattr(Config, "VERSION", "4.0"),
         min=getattr(Config, "MIN_SERVICIOS", 0),
         max=getattr(Config, "MAX_SERVICIOS", 0),
-        canal=await obtener_ajuste("canal_obligatorio", getattr(Config, "CANAL_OBLIGATORIO", "@VoltixPro")),
+        canal=await obtener_ajuste("canal_obligatorio", getattr(Config, "CANAL_OBLIGATORIO", "@Voltix_Pro")),
         simbolo=getattr(Config, "SIMBOLO", "$"),
         metodo=await obtener_ajuste("metodos_pago_activos", getattr(Config, "METODO_PAGO", "Transferencia")),
         cuenta=await obtener_ajuste("datos_pago", getattr(Config, "DATOS_PAGO", "Sin configurar")),
