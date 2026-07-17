@@ -26,10 +26,10 @@ menu_admin = InlineKeyboardMarkup([
     [InlineKeyboardButton("🔙 Volver al inicio", callback_data="ad_salir")]
 ])
 
-# 📌 Gestión de Paneles
+# 📌 Gestión de Paneles (AHORA CON VER IDs)
 menu_panel = InlineKeyboardMarkup([
     [InlineKeyboardButton("➕ Agregar nuevo", callback_data="pan_agregar")],
-    [InlineKeyboardButton("📋 Ver activos", callback_data="pan_lista")],
+    [InlineKeyboardButton("📋 Ver todos y su ID", callback_data="pan_ver_ids")],
     [InlineKeyboardButton("✏️ Editar", callback_data="pan_editar")],
     [InlineKeyboardButton("❌ Eliminar", callback_data="pan_eliminar")],
     [InlineKeyboardButton("🔙 Volver al menú admin", callback_data="menu_admin")]
